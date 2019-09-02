@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "es6",
+        "outDir": "lib",
+        "noImplicitAny": false,
+        "alwaysStrict": true,
+        "allowJs": true,
+        "lib": [ "es6", "dom" ],
+        "jsx": "react",
+        "sourceMap": false
+    },
+    "include": [ "src/*" ]
+}

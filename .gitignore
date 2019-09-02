@@ -1,0 +1,6 @@
+**/__pycache__
+**/node_modules/
+**/dist/
+**/Lean_game_maker.egg-info
+**/*.olean
+**/.vscode
