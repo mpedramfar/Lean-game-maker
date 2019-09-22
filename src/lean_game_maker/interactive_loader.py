@@ -122,7 +122,7 @@ class interactive_server:
         
         distutils.dir_util.copy_tree(self.interactive_path / 'dist', str(Path(self.outdir)))
         distutils.dir_util.copy_tree(self.interactive_path / 'lean_server' / self.toolchain, str(Path(self.outdir)))
-        self.make_library()
+#        self.make_library()
         
         return True
 

@@ -29,11 +29,11 @@ begin
   ...
 end
 ```
-
+You can use Markdown in the comments. It will be compiled with [showdown](http://demo.showdownjs.com/).
 Theorems and examples are similar to lemmas. The only difference is that examples are shown with full solution in the webpage, but lemmas and theorems should be solved by the player. If a line in not contained in a comment, lemma, theorem or example. Then it will be shown directly in the game. If such a line ends with ` -- hide`, it will not be shown. Alternatively, you can put a few lines inside blocks of the following format.
 ```lean
 -- begin hide
-** lean code here **
+** comment and lean code here **
 -- end hide
 ```
 

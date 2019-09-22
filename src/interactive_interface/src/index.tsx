@@ -9,10 +9,13 @@ export const SplitPane: any = sp;
 
 const MathJax = require("MathJax");
 
+const showdown = require("showdown");
+var markdownConverter = new showdown.Converter();
 
 
 interface LeanStatusProps {
   file: string;
+  isReady: () => void;
 }
 interface LeanStatusState {
   currentlyRunning: boolean;
@@ -42,8 +45,11 @@ class LeanStatus extends React.Component<LeanStatusProps, LeanStatusState> {
   }
 
   updateRunning(nextProps) {
+    var cr = currentlyRunning.value.indexOf(nextProps.file) !== -1;
+    if(! cr)
+      this.props.isReady();
     this.setState({
-      currentlyRunning: currentlyRunning.value.indexOf(nextProps.file) !== -1,
+      currentlyRunning: cr,
     });
   }
 
@@ -179,6 +185,7 @@ enum DisplayMode {
 interface InfoViewProps {
   file: string;
   cursor?: Position;
+  isSolved: () => void;
 }
 interface InfoViewState {
   goal?: GoalWidgetProps;
@@ -226,6 +233,11 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
     });
   }
 
+  checkIfSolved(){
+    if( this.state.messages.filter((v) => (v.severity =='error' || v.severity == 'warning')).length == 0 )
+      this.props.isSolved();
+  }
+
   refreshGoal(nextProps?: InfoViewProps) {
     if (!nextProps) {
       nextProps = this.props;
@@ -258,7 +270,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
       (<div key={i}>{MessageWidget({msg})}</div>));
     return (
       <div style={{overflow: 'auto', height: '100%'}}>
-        <LeanStatus file={this.props.file} />
+        <LeanStatus file={this.props.file} isReady={this.checkIfSolved.bind(this)}/>
         <div className='infoview-buttons'>
           <img src='./display-goal-light.svg' title='Display Goal'
             style={{opacity: (this.state.displayMode === DisplayMode.OnlyState ? 1 : 0.25)}}
@@ -292,6 +304,8 @@ interface LeanEditorProps {
   textAfter: string;
   readonly: boolean;
   height: number;
+  statementIsSolved: () => void;
+  onDidChangeContent: (string) => void;
 }
 interface LeanEditorState {
   cursor?: Position;
@@ -299,14 +313,11 @@ interface LeanEditorState {
 }
 
 
-var sharedEditorData: editorTextDataInterface = { 
+var activeEditorData: editorTextDataInterface = { 
   lineOffset: 0,
-  textBefore: "",
-  textAfter: "",
-  editorText: "",
-  activeLeanContent: ""
+  activeLeanContent: "",
 };
-sharedEditorData
+
 class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
   model: monaco.editor.IModel;
   editor: monaco.editor.IStandaloneCodeEditor;
@@ -319,9 +330,7 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
       status: null,
     };
 
-    sharedEditorData.lineOffset = this.props.lineOffset;
-    sharedEditorData.textBefore = this.props.textBefore;
-    sharedEditorData.textAfter  = this.props.textAfter;
+    activeEditorData.lineOffset = this.props.lineOffset;
 
     this.model = monaco.editor.getModel(monaco.Uri.file(this.props.file));
     if(! this.model){
@@ -330,11 +339,13 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
     }
 
     this.model.onDidChangeContent((e) => {
-      sharedEditorData.editorText = this.model.getValue();
-      sharedEditorData.activeLeanContent = sharedEditorData.textBefore + this.model.getValue() + sharedEditorData.textAfter;
+      activeEditorData.activeLeanContent = this.props.textBefore + this.model.getValue() + this.props.textAfter;
+      this.props.onDidChangeContent(this.model.getValue());
       checkInputCompletionChange(e, this.editor, this.model);
     });
-    this.model.setValue(this.props.initText);
+
+    if(this.props.initText != this.model.getValue())
+      this.model.setValue(this.props.initText);
   }
 
   componentDidMount() {
@@ -357,7 +368,7 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
     const canTranslate = this.editor.createContextKey('canTranslate', false);
     this.editor.onDidChangeCursorPosition((e) => {
       canTranslate.set(checkInputCompletionPosition(e, this.editor, this.model));
-      this.setState({cursor: {line: e.position.lineNumber + sharedEditorData.lineOffset, column: e.position.column - 1}});
+      this.setState({cursor: {line: e.position.lineNumber + activeEditorData.lineOffset, column: e.position.column - 1}});
     });
     this.editor.addCommand(monaco.KeyCode.Tab, () => {
       tabHandler(this.editor, this.model);
@@ -368,6 +379,7 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
   componentWillUnmount() {
     this.editor.dispose();
     this.editor = undefined;
+    this.model.onDidChangeContent((e) => {});
   }
 
 
@@ -383,7 +395,7 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
 
     const infoViewDiv = <div id="tactic_state_wrapper">
       <div id="info_view_div" className='infoContainer' style={{ height: '100%', width: '100%' }}>
-        <InfoView file={this.props.file} cursor={this.state.cursor}/>
+        <InfoView file={this.props.file} cursor={this.state.cursor} isSolved={this.props.statementIsSolved}/>
       </div>
     </div>;
 
@@ -394,116 +406,68 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
 
 
 interface TextProps {
-  textData: any;
+  content: string;
 }
 class Text extends React.Component<TextProps, {}> {
   constructor(props: TextProps) {
     super(props);
   }
   render() {
-    return <div>
-      {this.props.textData.paragraphs.map((paragraph, i) => {
-        return <p key={i}>{paragraph.content}</p>;
-      })}
-      </div>;
+    return <div dangerouslySetInnerHTML={{__html: markdownConverter.makeHtml(this.props.content)}}></div>;
   }
 }
 
 
-interface StatementProps {
-  fileName: string;
-  statementData: any;
+interface StatementProps extends LeanEditorProps {
+  text: string;
+  lean: string;
   type : string; // is equal to "lemma", "theorem" or "example"
   isActive: boolean;
   activate: () => void;
-  readonly: boolean;
+  solved : boolean;
 }
-interface StatementState {
-  temp : any;
-}
-class Statement extends React.Component<StatementProps, StatementState> {
+class Statement extends React.Component<StatementProps, {}> {
 
   constructor(props: StatementProps) {
     super(props);
-    this.state = {
-      temp : 0,
-    };
   }
 
   render() {
 
-
     var proof;
     if( this.props.isActive ){
-      var editorProps = {
-        file : this.props.fileName,
-        initText : this.props.statementData.editorText,
-        textBefore : this.props.statementData.textBefore,
-        textAfter : this.props.statementData.textAfter,
-        lineOffset : this.props.statementData.lineOffset,
-        height : this.props.statementData.height,
-        readonly: this.props.readonly,
-        };
-      proof = <LeanEditor {...editorProps} />;
+      proof = <LeanEditor {...this.props} />;
     } else {
       proof = <button onClick={this.props.activate}>Click here to prove !</button>;
     }
 
+    const title = (this.props.type == "lemma") ? "Lemma" :
+        ((this.props.type == "theorem") ? "Theorem" : "Example");
 
-    if (this.props.type == "lemma"){
-      return <div className="lemma_wrapper">
-        <span className="lemma_label">Lemma</span>
+    const label = this.props.solved ? 
+      <div style={{color:"green"}}> <span>&#x2713;</span><span className="lemma_label" >{title}</span> </div> :
+      <span className="lemma_label" >{title}</span>;
+
+    return <div className="lemma_wrapper">
+        {label}
         <div className="lemma_content">
 	        <div className="lemma_text">
-	          { this.props.statementData.text }
+	          { this.props.text }
     	    </div>
       	  <div className="lemma_lean">
-	          <LeanColorize text={this.props.statementData.lean} />
+	          <LeanColorize text={this.props.lean} />
     	    </div>
         </div>
         <LeanColorize text="begin"/>
         {proof}
         <LeanColorize text="end"/>
       </div>;
-    } else if (this.props.type == "theorem"){
-      return <div className="lemma_wrapper">
-        <span className="lemma_label">Theorem</span>
-        <div className="lemma_content">
-	        <div className="lemma_text">
-	          { this.props.statementData.text }
-    	    </div>
-      	  <div className="lemma_lean">
-	          <LeanColorize text={this.props.statementData.lean} />
-    	    </div>
-        </div>
-        <LeanColorize text="begin"/>
-        {proof}
-        <LeanColorize text="end"/>
-      </div>;
-    } else if (this.props.type == "example"){
-      return <div className="lemma_wrapper">
-        <span className="lemma_label">Example</span>
-        <div className="lemma_content">
-	        <div className="lemma_text">
-	          { this.props.statementData.text }
-    	    </div>
-      	  <div className="lemma_lean">
-	          <LeanColorize text={this.props.statementData.lean} />
-    	    </div>
-        </div>
-        <LeanColorize text="begin"/>
-        {proof}
-        <LeanColorize text="end"/>
-      </div>;
-    }
 
   }
 }
 
 
 
-
-var activeStatement = null;
 
 
 interface PageProps {
@@ -514,21 +478,11 @@ interface PageState {
   activeItemIndex: number;
 }
 class Page extends React.Component<PageProps, PageState> {
-  activeEditorText: string;
 
   constructor(props: PageProps) {
     super(props);
 
-    var pageItems = this.props.pageData.objects;
-    var i = 0;
-    for(; i < pageItems.length; i++){
-      if( pageItems[i].name == "lemma" || pageItems[i].name == "theorem" )
-        break;
-    }
-    this.state = {
-      activeItemIndex: i
-    };
-    activeStatement = pageItems[i];
+    this.state = { activeItemIndex: -1 };
     this.initEditorData.call(this);
   }
 
@@ -544,8 +498,7 @@ class Page extends React.Component<PageProps, PageState> {
       return i;
     }
   
-    var pageItems = this.props.pageData.objects;
-    pageItems.map( (itemData, i) => {
+    this.props.pageData.objects.map( (itemData, i) => {
       var startIndex       = nthIndex(rawText, "\n", itemData.firstLineNumber - 1) + 1;
       var endIndex         = nthIndex(rawText, "\n", itemData.lastLineNumber) + 1;
   
@@ -562,7 +515,7 @@ class Page extends React.Component<PageProps, PageState> {
         itemData.leanAfterProof    = rawText.substring(proofEndIndex, endIndex);
 
         if( itemData.editorText == undefined )
-          itemData.editorText      = itemData.proof;             // TODO : change it to "sorry"
+          itemData.editorText      = "sorry";   // if changed to "itemData.proof", it will show the all the proofs in the beginning
 
         itemData.height            = itemData.proof.split(/\r\n|\r|\n/).length;
 
@@ -597,17 +550,6 @@ class Page extends React.Component<PageProps, PageState> {
 
   }
 
-  activateEditor(prevIndex:number, index: number){
-    activeStatement.editorText = sharedEditorData.editorText;
-    activeStatement.rawText    = activeStatement.leanBeforeProof + activeStatement.proof 
-                                   + activeStatement.leanAfterProof; // We don't want any errors from inactive items
-
-
-    this.updateEditorData.call(this);
-    activeStatement = this.props.pageData.objects[index];
-    this.setState({ activeItemIndex: index });
-  }
-
   componentDidMount(){
     MathJax.Hub.Queue(["Typeset",MathJax.Hub]);
   }
@@ -616,7 +558,7 @@ class Page extends React.Component<PageProps, PageState> {
     const content = this.props.pageData.objects.map( (itemData, i) => {
       if( itemData.name == "text" )
       {
-        return <Text  key={i} textData={itemData}  />;
+        return <Text  key={i} content={itemData.content}  />;
       } 
       else if( itemData.name == "lean" && (! itemData.hidden))
       {
@@ -624,13 +566,39 @@ class Page extends React.Component<PageProps, PageState> {
       }
       else if( itemData.name == "lemma" || itemData.name == "theorem" || itemData.name == "example")
       {
+        var editorProps : LeanEditorProps = {
+          file : this.props.fileName,
+          initText : itemData.editorText,
+          textBefore : itemData.textBefore,
+          textAfter : itemData.textAfter,
+          lineOffset : itemData.lineOffset,
+          height : itemData.height,
+          readonly: itemData.name == "example",
+          statementIsSolved: () => { 
+            if(itemData.status != "solved") {
+              itemData.status = "solved";
+              this.forceUpdate();
+            }},
+          onDidChangeContent: (newText) => {
+            if(this.state.activeItemIndex == i){
+              itemData.editorText = newText;
+              itemData.rawText    = itemData.leanBeforeProof + itemData.proof 
+                    + itemData.leanAfterProof; // We don't want any errors from inactive items and we want to use them in our proofs
+            }},
+        };
+  
         return <Statement key={i}
-                      activate={this.activateEditor.bind(this, this.state.activeItemIndex, i)} 
+                      activate={() => {
+                        this.updateEditorData.call(this);
+                        this.setState({ activeItemIndex: i });                    
+                      }} 
                       isActive={this.state.activeItemIndex == i} 
-                      fileName={this.props.fileName} 
-                      statementData={itemData} 
-                      type={itemData.name} 
-                      readonly={itemData.name == "example"} />;
+                      type={itemData.name}
+                      solved={itemData.status == "solved"}
+                      text={itemData.text}
+                      lean={itemData.lean}
+                      {...editorProps}
+                      />;
       };
     });
 
@@ -639,52 +607,6 @@ class Page extends React.Component<PageProps, PageState> {
     </div>;
   }
 }
-
-
-interface LevelProps {
-  fileName: string;
-  levelData: any;
-}
-interface LevelState {
-  activePageNumber: number;
-}
-class Level extends React.Component<LevelProps, LevelState> {
-  constructor(props: LevelProps) {
-    super(props);
-    this.state = {
-      activePageNumber: 0
-    };
-  }
-
-  gotoPage(index){
-    if(activeStatement){
-      activeStatement.editorText = sharedEditorData.editorText;
-      activeStatement = null;  
-    }
-    this.setState({ activePageNumber: index });
-  }
-
-  render() {
-    // key value guarantees that a new item is created when key is different
-    const content = <Page fileName={this.props.fileName} key={this.state.activePageNumber}
-                      pageData={this.props.levelData[this.state.activePageNumber]} />;
-
-    const pageButtonsPanel = <div style={{ width: '100%', height: '2em', top: '2em', position: 'fixed' }}>
-      <button style={{ display: this.state.activePageNumber > 0 ? 'block': 'none',
-        marginLeft: 0, borderStyle: 'ridge', width: '20%', height:'100%'
-      }} onClick={() => { this.gotoPage.call(this, this.state.activePageNumber - 1); }}> Previous Page </button>
-      <button style={{ display: this.state.activePageNumber < this.props.levelData.length - 1 ? 'block': 'none',
-        marginLeft: '80%', borderStyle: 'ridge', width: '20%', height: '100%'
-      }} onClick={() => { this.gotoPage.call(this, this.state.activePageNumber + 1); }}> Next Page </button>
-    </div>
-
-    return <div>
-      {pageButtonsPanel}
-      <div id="page_wrapper"> {content} </div>
-    </div>;
-  }
-}
-
 
 
 interface GameProps {
@@ -706,24 +628,18 @@ class Game extends React.Component<GameProps, GameState> {
   }
 
   gotoLevel(index){
-    if(activeStatement){
-      activeStatement.editorText = sharedEditorData.editorText;
-      activeStatement = null;  
-    }
-    this.setState({ activeLevelNumber: index });
+    var newPageNumber = (this.state.activePageNumber < this.props.gameData[index].length) ? 
+              this.state.activePageNumber : this.props.gameData[index].length - 1;
+    
+    this.setState({ activeLevelNumber: index, activePageNumber: newPageNumber });
   }
 
   gotoPage(index){
-    if(activeStatement){
-      activeStatement.editorText = sharedEditorData.editorText;
-      activeStatement = null;  
-    }
     this.setState({ activePageNumber: index });
   }
 
   render() {
-    // we need a unique key for every page
-    const key = this.state.activeLevelNumber * 100 + this.state.activePageNumber; // TODO : This should be changed
+    const key = this.state.activeLevelNumber * 1000 + this.state.activePageNumber; // TODO : We need a unique key for every page. This should be changed
 
     const levelData = this.props.gameData[this.state.activeLevelNumber];
 
@@ -780,14 +696,12 @@ const metaPromise = fetch(leanJsOpts.libraryZip.slice(0, -3) + 'info.json')
 
 const gameData = require('game_data');
 
-console.log(gameData);
-
 // tslint:disable-next-line:no-var-requires
 (window as any).require(['vs/editor/editor.main'], () => {
 
   const fn = monaco.Uri.file('test.lean').fsPath;
 
-  registerLeanLanguage(leanJsOpts, sharedEditorData);
+  registerLeanLanguage(leanJsOpts, activeEditorData);
   
   render(
       <Game fileName={fn} gameData={gameData}/>,

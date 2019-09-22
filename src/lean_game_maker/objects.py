@@ -12,18 +12,12 @@ from lean_game_maker.line_reader import LineReader, dismiss_line, LeanLines
 #  Objects #
 ############
 @dataclass
-class Paragraph:
-    name: str = 'paragraph'
+class Text:
+    name: str = 'text'
     content: str = ''
 
     def append(self, line):
         self.content = self.content + line
-
-
-@dataclass
-class Text:
-    name: str = 'text'
-    paragraphs: List[Paragraph] = field(default_factory=list)
 
 
 @dataclass
@@ -141,14 +135,11 @@ class TextBegin(LineReader):
     def run(self, m, file_reader):
         file_reader.status = 'text'
         text = Text()
-        text.paragraphs = [Paragraph()]
         file_reader.output.append(text)
         def normal_line(file_reader, line):
-            text.paragraphs[-1].append(line)
+            text.append(line)
         file_reader.normal_line_handler = normal_line
-        def blank_line(file_reader, line):
-            text.paragraphs.append(Paragraph())
-        file_reader.blank_line_handler = blank_line
+        file_reader.blank_line_handler = normal_line
         return True
 
 
