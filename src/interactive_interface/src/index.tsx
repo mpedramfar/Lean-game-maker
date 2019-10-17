@@ -177,10 +177,6 @@ class ToggleDoc extends React.Component<ToggleDocProps, ToggleDocState> {
   }
 }
 
-enum DisplayMode {
-  OnlyState, // only the state at the current cursor position including the tactic state
-  AllMessage, // all messages
-}
 
 interface InfoViewProps {
   file: string;
@@ -190,7 +186,6 @@ interface InfoViewProps {
 interface InfoViewState {
   goal?: GoalWidgetProps;
   messages: Message[];
-  displayMode: DisplayMode;
 }
 class InfoView extends React.Component<InfoViewProps, InfoViewState> {
   private subscriptions: monaco.IDisposable[] = [];
@@ -198,8 +193,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
   constructor(props: InfoViewProps) {
     super(props);
     this.state = {
-      messages: [],
-      displayMode: DisplayMode.OnlyState,
+      messages: []
     };
   }
   componentWillMount() {
@@ -253,40 +247,43 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
   }
 
   render() {
-    const goal = (this.state.displayMode === DisplayMode.OnlyState) &&
-      this.state.goal &&
+    const goal = this.state.goal &&
       (<div key={'goal'}>{GoalWidget(this.state.goal)}</div>);
-    const filteredMsgs = (this.state.displayMode === DisplayMode.AllMessage) ?
-      this.state.messages :
-      this.state.messages.filter(({pos_col, pos_line, end_pos_col, end_pos_line}) => {
-        if (!this.props.cursor) { return false; }
-        const {line, column} = this.props.cursor;
-        return pos_line <= line &&
-          ((!end_pos_line && line === pos_line) || line <= end_pos_line) &&
-          (line !== pos_line || pos_col <= column) &&
-          (line !== end_pos_line || end_pos_col >= column);
-      });
-    const msgs = filteredMsgs.map((msg, i) =>
-      (<div key={i}>{MessageWidget({msg})}</div>));
-    return (
-      <div style={{overflow: 'auto', height: '100%'}}>
-        <LeanStatus file={this.props.file} isReady={this.checkIfSolved.bind(this)}/>
-        <div className='infoview-buttons'>
-          <img src='./display-goal-light.svg' title='Display Goal'
-            style={{opacity: (this.state.displayMode === DisplayMode.OnlyState ? 1 : 0.25)}}
-            onClick={() => {
-              this.setState({ displayMode: DisplayMode.OnlyState });
-            }}/>
-          <img src='./display-list-light.svg' title='Display Messages'
-            style={{opacity: (this.state.displayMode === DisplayMode.AllMessage ? 1 : 0.25)}}
-            onClick={() => {
-              this.setState({ displayMode: DisplayMode.AllMessage });
-            }}/>
+
+    const goalDiv = (
+      <div style={{overflowY: 'auto', width: '100%', position: 'absolute', top: 0, bottom: 0}}>
+        <div style={{ marginRight: '1ex', float: 'right' }}>
+          <img src='./display-goal-light.svg' title='Display Goal' />
         </div>
         {goal}
+      </div>
+    );
+    
+    const msgs = this.state.messages.map((msg, i) =>
+      (<div key={i}>{MessageWidget({msg})}</div>));
+
+    const msgsDiv = (
+      <div style={{overflowY: 'auto', width: '100%', position: 'absolute', top: '1em', bottom: 0}}>
+        <div style={{ marginRight: '1ex', float: 'right' }}>
+          <img src='./display-list-light.svg' title='Display Messages' />
+        </div>
         {msgs}
       </div>
     );
+
+    return ( 
+      <div className='no-mathjax' style={{ position: 'absolute', top: '1em', bottom: '1em', left: '1em', right: '1em'}}>
+        <LeanStatus file={this.props.file} isReady={this.checkIfSolved.bind(this)}/>
+        <div>
+          <SplitPane split="horizontal" defaultSize={ window.innerHeight * 0.40 }>
+            {goalDiv}
+            {msgsDiv}
+          </SplitPane>
+        </div>
+      </div>
+    );
+
+    
   }
 }
 
@@ -304,11 +301,9 @@ interface LeanEditorProps {
   textAfter: string;
   readonly: boolean;
   height: number;
-  statementIsSolved: () => void;
-  onDidChangeContent: (string) => void;
+  onDidCursorMove: (Position) => void;
 }
 interface LeanEditorState {
-  cursor?: Position;
   status: string;
 }
 
@@ -316,13 +311,12 @@ interface LeanEditorState {
 var activeEditorData: editorTextDataInterface = { 
   lineOffset: 0,
   activeLeanContent: "",
+  activeText: ""
 };
 
 class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
   model: monaco.editor.IModel;
   editor: monaco.editor.IStandaloneCodeEditor;
-
-  editorData: editorTextDataInterface;
 
   constructor(props: LeanEditorProps) {
     super(props);
@@ -339,8 +333,9 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
     }
 
     this.model.onDidChangeContent((e) => {
+      activeEditorData.activeText = this.model.getValue();
       activeEditorData.activeLeanContent = this.props.textBefore + this.model.getValue() + this.props.textAfter;
-      this.props.onDidChangeContent(this.model.getValue());
+      console.log("activeEditorData = ", activeEditorData);
       checkInputCompletionChange(e, this.editor, this.model);
     });
 
@@ -368,7 +363,7 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
     const canTranslate = this.editor.createContextKey('canTranslate', false);
     this.editor.onDidChangeCursorPosition((e) => {
       canTranslate.set(checkInputCompletionPosition(e, this.editor, this.model));
-      this.setState({cursor: {line: e.position.lineNumber + activeEditorData.lineOffset, column: e.position.column - 1}});
+      this.props.onDidCursorMove({line: e.position.lineNumber + activeEditorData.lineOffset, column: e.position.column - 1});
     });
     this.editor.addCommand(monaco.KeyCode.Tab, () => {
       tabHandler(this.editor, this.model);
@@ -384,22 +379,22 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
 
 
   render() {
-    const editorDiv = <div id='editor_div' style={{ height: (1.25 * this.props.height)+'em', 
-                              display: 'flex', flexDirection: 'row', marginTop: '1ex', marginBottom: '1ex' }}>
-      <div ref='monaco' style={{
-        height: '100%', width: 'calc(100% - 2em)',
-        marginRight: '1ex',
-        overflow: 'hidden',
-      }} />
-    </div>;
-
-    const infoViewDiv = <div id="tactic_state_wrapper">
-      <div id="info_view_div" className='infoContainer' style={{ height: '100%', width: '100%' }}>
-        <InfoView file={this.props.file} cursor={this.state.cursor} isSolved={this.props.statementIsSolved}/>
+    const editorDiv = (
+      <div id='editor_div' style={{ 
+        height: (1.25 * this.props.height)+'em', 
+        display: 'flex', flexDirection: 'row', 
+        marginTop: '1ex', marginBottom: '1ex' 
+      }}>
+        <div ref='monaco' style={{
+          height: '100%', width: 'calc(100% - 2em)',
+          marginRight: '1ex',
+          overflow: 'hidden',
+        }}/>
       </div>
-    </div>;
+    );
 
-    return <div className='no-mathjax'> {editorDiv} {infoViewDiv} </div>;
+
+    return <div className='no-mathjax'> {editorDiv} </div>;
   }
 
 }
@@ -438,7 +433,7 @@ class Statement extends React.Component<StatementProps, {}> {
     if( this.props.isActive ){
       proof = <LeanEditor {...this.props} />;
     } else {
-      proof = <button onClick={this.props.activate}>Click here to prove !</button>;
+      proof = <LeanColorize text={"  sorry"}/>; // replace it with the proof
     }
 
     const title = (this.props.type == "lemma") ? "Lemma" :
@@ -469,25 +464,32 @@ class Statement extends React.Component<StatementProps, {}> {
 
 
 
-
-interface PageProps {
+interface LevelProps {
   fileName: string;
-  pageData: any;
+  levelData: any;
+  onDidCursorMove: (Position) => void;
 }
-interface PageState {
-  activeItemIndex: number;
+interface LevelState {
+  //
 }
-class Page extends React.Component<PageProps, PageState> {
+class Level extends React.Component<LevelProps, LevelState> {
 
-  constructor(props: PageProps) {
+  constructor(props: LevelProps) {
     super(props);
 
-    this.state = { activeItemIndex: -1 };
+    let i = 0;
+    for(; i < this.props.levelData.objects.length; i++){
+      if(this.props.levelData.objects[i].name == "lemma" || this.props.levelData.objects[i].name == "theorem")
+        break;
+    }
+
+    this.props.levelData.activeIndex = (i < this.props.levelData.objects.length) ? i : -1;
+
     this.initEditorData.call(this);
   }
 
   initEditorData(){ // This function could be done in the python code
-    var rawText   = this.props.pageData.raw_text + "\n";
+    var rawText   = this.props.levelData.raw_text + "\n";
 
     function nthIndex(str: string, pat: string, n: number) {
       var L = str.length, i = -1;
@@ -498,13 +500,13 @@ class Page extends React.Component<PageProps, PageState> {
       return i;
     }
   
-    this.props.pageData.objects.map( (itemData, i) => {
+    this.props.levelData.objects.map( (itemData, i) => {
       var startIndex       = nthIndex(rawText, "\n", itemData.firstLineNumber - 1) + 1;
       var endIndex         = nthIndex(rawText, "\n", itemData.lastLineNumber) + 1;
   
       itemData.rawText     = rawText.substring(startIndex, endIndex);
       if(i == 0)
-        this.props.pageData.header  = rawText.substring(0, startIndex);
+        this.props.levelData.header  = rawText.substring(0, startIndex);
 
       if( itemData.name == "lemma" || itemData.name == "theorem" ) {
         var proofStartIndex = nthIndex(rawText, "\n", itemData.firstProofLineNumber - 1) + 1;
@@ -529,20 +531,20 @@ class Page extends React.Component<PageProps, PageState> {
 
   
   updateEditorData(){
-    var pageItems = this.props.pageData.objects;
+    var levelItems = this.props.levelData.objects;
 
-    pageItems.map( (itemData, i) => {
-      itemData.textBefore = this.props.pageData.header
+    levelItems.map( (itemData, i) => {
+      itemData.textBefore = this.props.levelData.header
       for(var j = 0; j < i; j++)
-        itemData.textBefore += pageItems[j].rawText;
+        itemData.textBefore += levelItems[j].rawText;
       if(itemData.name == "lemma" || itemData.name == "theorem"){
         itemData.textBefore += itemData.leanBeforeProof;
         itemData.lineOffset = itemData.textBefore.split(/\r\n|\r|\n/).length - 1; // number of lines
       }
         
       itemData.textAfter = "";
-      for(var j = pageItems.length - 1; j > i; j--)
-        itemData.textAfter = pageItems[j].rawText + itemData.textAfter;
+      for(var j = levelItems.length - 1; j > i; j--)
+        itemData.textAfter = levelItems[j].rawText + itemData.textAfter;
       if(itemData.name == "lemma" || itemData.name == "theorem")
         itemData.textAfter = itemData.leanAfterProof + itemData.textAfter;
 
@@ -555,7 +557,7 @@ class Page extends React.Component<PageProps, PageState> {
   }
 
   render() {
-    const content = this.props.pageData.objects.map( (itemData, i) => {
+    const content = this.props.levelData.objects.map( (itemData, i) => {
       if( itemData.name == "text" )
       {
         return <Text  key={i} content={itemData.content}  />;
@@ -574,25 +576,12 @@ class Page extends React.Component<PageProps, PageState> {
           lineOffset : itemData.lineOffset,
           height : itemData.height,
           readonly: itemData.name == "example",
-          statementIsSolved: () => { 
-            if(itemData.status != "solved") {
-              itemData.status = "solved";
-              this.forceUpdate();
-            }},
-          onDidChangeContent: (newText) => {
-            if(this.state.activeItemIndex == i){
-              itemData.editorText = newText;
-              itemData.rawText    = itemData.leanBeforeProof + itemData.proof 
-                    + itemData.leanAfterProof; // We don't want any errors from inactive items and we want to use them in our proofs
-            }},
+          onDidCursorMove: this.props.onDidCursorMove
         };
   
-        return <Statement key={i}
-                      activate={() => {
-                        this.updateEditorData.call(this);
-                        this.setState({ activeItemIndex: i });                    
-                      }} 
-                      isActive={this.state.activeItemIndex == i} 
+      return <Statement key={i}
+                      activate={() => {}}
+                      isActive={this.props.levelData.activeIndex == i} 
                       type={itemData.name}
                       solved={itemData.status == "solved"}
                       text={itemData.text}
@@ -602,9 +591,7 @@ class Page extends React.Component<PageProps, PageState> {
       };
     });
 
-    return <div id="wrapper">
-      <div id="content"> {content} </div>
-    </div>;
+    return <div>{content}</div>;
   }
 }
 
@@ -614,68 +601,110 @@ interface GameProps {
   gameData: any;
 }
 interface GameState {
+  activeWorldNumber: number;
   activeLevelNumber: number;
-  activePageNumber: number;
+  cursor?: Position;
 }
 class Game extends React.Component<GameProps, GameState> {
 
   constructor(props: GameProps) {
     super(props);
     this.state = {
+      activeWorldNumber: 0,
       activeLevelNumber: 0,
-      activePageNumber: 0,
     };
   }
 
-  gotoLevel(index){
-    var newPageNumber = (this.state.activePageNumber < this.props.gameData[index].length) ? 
-              this.state.activePageNumber : this.props.gameData[index].length - 1;
+  goto(world: number, level: number){
+    let levelData = this.props.gameData[this.state.activeWorldNumber][this.state.activeLevelNumber]
+    let statementData = levelData.objects[levelData.activeIndex];
+
+    if(statementData){
+      statementData.editorText = activeEditorData.activeText;
+      statementData.rawText = statementData.leanBeforeProof + statementData.proof 
+               + statementData.leanAfterProof; // We don't want any errors from inactive items and we want to use them in our proofs
+    }
     
-    this.setState({ activeLevelNumber: index, activePageNumber: newPageNumber });
+    this.setState({ activeWorldNumber: world, activeLevelNumber: level });
   }
 
-  gotoPage(index){
-    this.setState({ activePageNumber: index });
+  gotoWorld(i: number){
+    this.goto(i, 0);
+  }
+
+  gotoLevel(i: number){
+    this.goto(this.state.activeWorldNumber, i);
   }
 
   render() {
-    const key = this.state.activeLevelNumber * 1000 + this.state.activePageNumber; // TODO : We need a unique key for every page. This should be changed
+    const worldData = this.props.gameData[this.state.activeWorldNumber];
 
-    const levelData = this.props.gameData[this.state.activeLevelNumber];
-
-    const content = <Page fileName={this.props.fileName} key={key}
-        pageData={levelData[this.state.activePageNumber]} />;
-
-    const levelButtonsPanel = <div style={{ width: '100%', height: '2em', top: '0', position: 'fixed' }}>
-      <button disabled={ this.state.activeLevelNumber == 0 } 
+    const worldButtonsPanel = <div style={{ width: '100%', height: '2em', top: '0', position: 'fixed' }}>
+      <button disabled={ this.state.activeWorldNumber == 0 } 
         style={{ 
           float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
-        }} onClick={() => { this.gotoLevel.call(this, this.state.activeLevelNumber - 1); }}> Previous Level </button>
-      <button disabled={ this.state.activeLevelNumber == this.props.gameData.length - 1 } 
+        }} onClick={() => { this.gotoWorld.call(this, this.state.activeWorldNumber - 1); }}> Previous World </button>
+      <button disabled={ this.state.activeWorldNumber == this.props.gameData.length - 1 } 
         style={{
           float: 'right', borderStyle: 'ridge', width: '20%', height: '100%'
-        }} onClick={() => { this.gotoLevel.call(this, this.state.activeLevelNumber + 1); }}> Next Level </button>
-      <div style={{ textAlign: 'center' }}><h3> Level {this.state.activeLevelNumber + 1} </h3></div>
+        }} onClick={() => { this.gotoWorld.call(this, this.state.activeWorldNumber + 1); }}> Next World </button>
+      <div style={{ textAlign: 'center' }}><h3> World {this.state.activeWorldNumber + 1} </h3></div>
     </div>;
 
-    const pageButtonsPanel = <div style={{ width: '100%', height: '2em', top: '2em', position: 'fixed' }}>
-      <button disabled={ this.state.activePageNumber == 0 } 
+    const levelButtonsPanel = <div style={{ width: '100%', height: '2em', top: '2em', position: 'fixed' }}>
+      <button disabled={ this.state.activeLevelNumber == 0 } 
         style={{
           float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
-        }} onClick={() => { this.gotoPage.call(this, this.state.activePageNumber - 1); }}> Previous Page </button>
-      <button disabled={ this.state.activePageNumber == levelData.length - 1 } 
+        }} onClick={() => { this.gotoLevel.call(this, this.state.activeLevelNumber - 1); }}> Previous Level </button>
+      <button disabled={ this.state.activeLevelNumber == worldData.length - 1 } 
         style={{ 
           float: 'right', borderStyle: 'ridge', width: '20%', height: '100%' 
-        }} onClick={() => { this.gotoPage.call(this, this.state.activePageNumber + 1); }}> Next Page </button>
-      <div style={{ textAlign: 'center' }}><h4> Page {this.state.activePageNumber + 1} </h4></div>
-    </div>
-
-
-    return <div>
-      {levelButtonsPanel}
-      {pageButtonsPanel}
-      <div style={{ marginTop: '4em' }} id="page_wrapper"> {content} </div>
+        }} onClick={() => { this.gotoLevel.call(this, this.state.activeLevelNumber + 1); }}> Next Level </button>
+      <div style={{ textAlign: 'center' }}><h4> Level {this.state.activeLevelNumber + 1} </h4></div>
     </div>;
+
+
+    const key = this.state.activeWorldNumber * 1000 + this.state.activeLevelNumber; // We need a unique key for every level.
+
+    const content = <Level fileName={this.props.fileName} key={key} levelData={worldData[this.state.activeLevelNumber]} 
+        onDidCursorMove={(c) => {this.setState({cursor: c})}}/>;
+
+
+    // statementIsSolved: () => { 
+    //   if(itemData.status != "solved") {
+    //     itemData.status = "solved";
+    //     this.forceUpdate();
+    //   }},
+        
+    const infoViewDiv = <InfoView file={this.props.fileName} cursor={this.state.cursor} isSolved={() => {}}/>;
+
+    const divStyle = {
+      position: 'absolute',
+      top: 0, bottom: 0,
+      left: 0, right: 0,
+      padding: '1em',
+      borderStyle: 'double'
+    } as React.CSSProperties;
+
+    return (
+      <div>
+        {worldButtonsPanel}
+        {levelButtonsPanel}
+        <div style={{ position: 'fixed', top: '5em', bottom: '1em', left: '1em', right: '1em'}}> 
+          <SplitPane split='vertical' defaultSize={ window.innerWidth * 0.6 }>
+            <div style={{
+              ...divStyle,
+              overflowY: 'scroll',
+            }}> 
+              {content}
+            </div>
+            <div style={divStyle}>
+              {infoViewDiv}
+            </div>
+          </SplitPane>
+        </div>
+      </div>
+    );
   }
 }
 

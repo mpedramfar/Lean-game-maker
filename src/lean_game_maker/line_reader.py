@@ -18,14 +18,8 @@ class LeanLines:
     name: str = 'lean'
     lean: str = ''
 
-    def lean_append(self, line):
+    def append(self, line):
         self.lean += line
-
-
-class LeanLine:
-    def __init__(self, content):
-        self.name = 'lean'
-        self.content = content
 
 
 class FileReader:
@@ -71,7 +65,7 @@ class FileReader:
                         self.blank_line_handler(self, line)
                     elif self.status == '':                     # There is a line outside of lemma and everything, and it contains something.
                         l = LeanLines()                         # We will consider it as simply "lean code"
-                        l.lean_append(line)
+                        l.append(line)
                         l.firstLineNumber = self.cur_line_nb
                         l.lastLineNumber = self.cur_line_nb
                         l.hidden = True if regex.compile(r'^[\s\S]*--\s*hide\s*$').match(line) else False

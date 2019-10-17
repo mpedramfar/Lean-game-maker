@@ -12,14 +12,13 @@ import jsonpickle
 
 import lean_game_maker
 from lean_game_maker.line_reader import FileReader
-from lean_game_maker.objects import (HiddenBegin, HiddenEnd, SectionBegin,
-    SectionEnd, SubSectionBegin, SubSectionEnd, TextBegin, TextEnd,
+from lean_game_maker.objects import (HiddenBegin, HiddenEnd, 
+    TextBegin, TextEnd,
     DefinitionBegin, DefinitionEnd, 
     ExampleBegin, ExampleEnd,
     LemmaBegin, LemmaEnd,
     TheoremBegin, TheoremEnd,
-    ProofBegin, ProofEnd,
-    ProofComment)
+    ProofBegin, ProofEnd)
 
 from lean_game_maker.interactive_loader import interactive_server
 
@@ -61,34 +60,34 @@ def render_lean_project(outdir=None, debug=False):
 
 
     lecture_reader = FileReader([HiddenBegin, HiddenEnd,
-#             SectionBegin, SectionEnd, 
-#             SubSectionBegin, SubSectionEnd,
              TextBegin, TextEnd, 
-#             DefinitionBegin, DefinitionEnd,
              ExampleBegin, ExampleEnd,
              LemmaBegin, LemmaEnd,
              TheoremBegin, TheoremEnd,
-             ProofBegin, ProofEnd, ProofComment])
+             ProofBegin, ProofEnd, 
+             ])
     
     
-    level=1
-    page=1
     game_data = []
-    for level in range(1, 10):
-        if not Path(f'src/game/level{level}').exists():
+    world=0
+    while True:
+        world += 1
+        if not Path(f'src/game/world{world}').exists():
             break
-        level_data = []
-        for page in range(1, 10):
-            lean_file = Path(f'src/game/level{level}/page{page}.lean')
+        world_data = []
+        level=0
+        while True:
+            level += 1
+            lean_file = Path(f'src/game/world{world}/level{level}.lean')
             if not lean_file.exists():
                 break
-            print(f"level : {level}, page : {page}")
+            print(f"world : {world}, level : {level}")
             lecture_reader.read_file(str(lean_file))
-            page_data = { 'raw_text' : lecture_reader.raw_text, 'objects' : lecture_reader.output }
-            page_data = jsonpickle.loads(jsonpickle.dumps(page_data, unpicklable=True))
-            level_data.append(page_data)
+            level_data = { 'raw_text' : lecture_reader.raw_text, 'objects' : lecture_reader.output }
+            level_data = jsonpickle.loads(jsonpickle.dumps(level_data, unpicklable=True))
+            world_data.append(level_data)
             lecture_reader.hard_reset()
-        game_data.append(level_data)
+        game_data.append(world_data)
 
     with open(str(Path(outdir) / 'game_data.js'), 'w') as f:
         temp = jsonpickle.encode(game_data, unpicklable=False)

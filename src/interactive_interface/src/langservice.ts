@@ -48,6 +48,7 @@ export let delayMs = 1000;
 export interface editorTextDataInterface {
   lineOffset: number,
   activeLeanContent: string,
+  activeText?: string,
 }
 
 

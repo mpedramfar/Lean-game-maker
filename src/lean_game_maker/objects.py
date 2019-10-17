@@ -19,22 +19,6 @@ class Text:
     def append(self, line):
         self.content = self.content + line
 
-
-@dataclass
-class Section:
-    name: str = 'section'
-    title: str = ''
-
-    def title_append(self, line):
-        self.title = self.title + line
-
-@dataclass
-class SubSection(Section):
-    name: str = 'subsection'
-    title: str = ''
-
-    def title_append(self, line):
-        self.title = self.title + line
     
 @dataclass
 class Bilingual:
@@ -105,6 +89,16 @@ class Example(Bilingual):
 #################
 #  Line readers #
 #################
+class HiddenLine(LineReader):
+    regex = regex.compile(r'^[\s\S]*--\s*hide\s*$')
+
+    def run(self, m, file_reader):
+        hidden_line = LeanLines()
+        hidden_line.append(m.string)
+        hidden_line.hidden = True
+        self.output.append(hidden_line)
+        return True
+
 
 class HiddenBegin(LineReader):
     regex = regex.compile(r'-- begin hide\s*')
@@ -133,6 +127,8 @@ class TextBegin(LineReader):
     regex = regex.compile(r'\s*/-\s*$')
 
     def run(self, m, file_reader):
+        if file_reader.status is not '':
+            return False
         file_reader.status = 'text'
         text = Text()
         file_reader.output.append(text)
@@ -148,52 +144,6 @@ class TextEnd(LineReader):
 
     def run(self, m, file_reader):
         if file_reader.status is not 'text':
-            return False
-        file_reader.reset()
-        return True
-
-
-class SectionBegin(LineReader):
-    regex = regex.compile(r'\s*/-\s*Section\s*$')
-
-    def run(self, m, file_reader):
-        file_reader.status = 'section'
-        sec = Section()
-        file_reader.output.append(sec)
-        def normal_line(file_reader, line):
-            sec.title_append(line)
-        file_reader.normal_line_handler = normal_line
-        return True
-
-
-class SectionEnd(LineReader):
-    regex = regex.compile(r'-/')
-
-    def run(self, m, file_reader):
-        if file_reader.status is not 'section':
-            return False
-        file_reader.reset()
-        return True
-
-
-class SubSectionBegin(LineReader):
-    regex = regex.compile(r'\s*/-\s*Sub-section\s*$')
-
-    def run(self, m, file_reader):
-        file_reader.status = 'subsection'
-        sec = SubSection()
-        file_reader.output.append(sec)
-        def normal_line(file_reader, line):
-            sec.title_append(line)
-        file_reader.normal_line_handler = normal_line
-        return True
-
-
-class SubSectionEnd(LineReader):
-    regex = regex.compile(r'-/')
-
-    def run(self, m, file_reader):
-        if file_reader.status is not 'subsection':
             return False
         file_reader.reset()
         return True
@@ -328,26 +278,3 @@ class ProofEnd(LineReader):
         file_reader.reset()
         return True
 
-
-class ProofComment(LineReader):
-    regex = regex.compile(r'^[\s{]*-- (.*)$')
-
-    def run(self, m, file_reader):
-        if file_reader.status == 'proof':
-            item = ProofItem()
-            try:
-                file_reader.output[-1].proof_append(item)
-            except:
-                print(f"Something is wrong on line {file_reader.cur_line_nb}.  Maybe we are trying to comment on a proof of a lemma whose statement has no human readable version.") 
-                sys.exit(1)
-            file_reader.status = 'proof_comment'
-        elif file_reader.status == 'proof_comment':
-            item = file_reader.output[-1].proof.items[-1]
-        else:
-            return False
-        item.text_append(m.group(1))
-        def normal_line(file_reader, line):
-            file_reader.status = 'proof'
-            item.lines.append(ProofLine(lean=line))
-        file_reader.normal_line_handler = normal_line
-        return True

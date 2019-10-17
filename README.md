@@ -1,20 +1,14 @@
 # Lean Game Maker
 
-This prototype is a library which renders convert Lean files into an interactive game with a javascript Lean server running on the browser.
+This prototype is a library which renders structured Lean files into an interactive game with a javascript Lean server running on the browser.
 
 ## Installation
 
-You need Python 3.7 or later, and Lean. Make sure the python package
-manager `pip` is installed.  Clone this repository, go to its root directory
-and run `pip3 install .` (using `sudo -H` if needed). It's also recommended to
-install `ipython` for interactive use. Alternatively, if you don't want to mess
-up with your global python environment, you can use a dedicated virtual
-environment. This is explained in the more complete 
-[installation guide](https://github.com/mpedramfar/Lean-game-maker/blob/master/INSTALL.md).
+See the [installation guide](https://github.com/mpedramfar/Lean-game-maker/blob/master/INSTALL.md).
 
 ## Usage
 
-Make a Lean project and add a folder named `game` to the `src` path. For every level, add a folder to `game` and name them `1`, `2`, ... . Inside each level, add files `1.lean`, `2.lean`, ... for every page in the corresponding level. Inside each Lean file, use the following format for comment and lemmas:
+Make a Lean project and add a folder named `game` to the `src` path. For every world, add a folder to `game` and name them `world1`, `world2`, ... . Inside each world, add files `level1.lean`, `level2.lean`, ... for every level in the corresponding world. Inside each Lean file, use the following format for comment and lemmas:
 
 ```lean
 /-
