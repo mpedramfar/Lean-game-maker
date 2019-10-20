@@ -14,6 +14,7 @@ import lean_game_maker
 from lean_game_maker.line_reader import FileReader
 from lean_game_maker.objects import (HiddenBegin, HiddenEnd, 
     TextBegin, TextEnd,
+    TacticBegin, TacticEnd,
     ExampleBegin, ExampleEnd,
     LemmaBegin, LemmaEnd,
     TheoremBegin, TheoremEnd,
@@ -54,12 +55,14 @@ def render_lean_project(outdir=None, debug=False):
 
     s = interactive_server(interactive_path=interactive_path, paths=paths,
                     toolchain=toolchain, source_lib='.', outdir=outdir, debug=debug)
-    s.copy_server()
+    if not s.copy_server():
+        return
 
 
 
     lecture_reader = FileReader([HiddenBegin, HiddenEnd,
-             TextBegin, TextEnd, 
+             TextBegin, TextEnd,
+             TacticBegin, TacticEnd,
              ExampleBegin, ExampleEnd,
              LemmaBegin, LemmaEnd,
              TheoremBegin, TheoremEnd,

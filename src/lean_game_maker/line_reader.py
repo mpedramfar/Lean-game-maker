@@ -85,6 +85,20 @@ class FileReader:
                     o.editorText = o.proof if (o.type == "example") else "sorry"
                     o.lineOffset = o.firstProofLineNumber-1
 
+                    temp = o.lean.strip().split(' ', 1)[1].rsplit(':=', 1)[0].strip()
+                    if o.type == "example":
+                        o.statement = temp
+                        break
+                    t1 = temp.find(' ');  t1 = len(temp) if t1 < 0 else t1
+                    t2 = temp.find(':');  t2 = len(temp) if t2 < 0 else t2
+                    t3 = temp.find('(');  t3 = len(temp) if t3 < 0 else t3
+                    t4 = temp.find('{');  t4 = len(temp) if t4 < 0 else t4
+                    t = min(t1, t2, t3, t4)
+                    o.name = temp[:t]
+                    temp = temp[t:].strip()
+                    o.statement = temp[1:].strip() if temp[0] == ':' else temp
+
+
 class LineReader:
     regex = regex.compile(r'.*')
 

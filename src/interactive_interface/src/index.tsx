@@ -25,7 +25,7 @@ showdown.extension('targetlink', function() { // open links in new tabs
     replace: '$1 target="_blank"$2'
   }];
 });
-var markdownConverter = new showdown.Converter({
+let markdownConverter = new showdown.Converter({
   extensions: ['targetlink']
 });
 
@@ -62,7 +62,7 @@ class LeanStatus extends React.Component<LeanStatusProps, LeanStatusState> {
   }
 
   updateRunning(nextProps) {
-    var cr = currentlyRunning.value.indexOf(nextProps.file) !== -1;
+    let cr = currentlyRunning.value.indexOf(nextProps.file) !== -1;
     if(! cr)
       this.props.isReady();
     this.setState({
@@ -125,13 +125,6 @@ function MessageWidget({msg}: MessageWidgetProps) {
       <LeanColorize text={msg.text}/>
     </div>
   );
-  // return (
-  //   <div style={{paddingBottom: '1em'}}>
-  //     <div className='info-header' style={{ color: colorOfSeverity[msg.severity] }}>
-  //       {msg.pos_line}:{msg.pos_col}: {msg.severity}: {msg.caption}</div>
-  //     <div className='code-block' dangerouslySetInnerHTML={{__html: leanColorize(msg.text)}}/>
-  //   </div>
-  // );
 }
 
 interface Position {
@@ -337,7 +330,7 @@ interface LeanEditorState {
 }
 
 
-var activeEditorData: editorTextDataInterface = { 
+let activeEditorData: editorTextDataInterface = { 
   lineOffset: 0,
   activeLeanContent: "",
   activeText: ""
@@ -459,11 +452,11 @@ class Statement extends React.Component<StatementProps, {}> {
 
   render() {
 
-    var proof;
+    let proof;
     if( this.props.isActive ){
       proof = <LeanEditor {...this.props} />;
     } else {
-      proof = <LeanColorize text={this.props.initText}/>; // replace it with the proof
+      proof = <LeanColorize text={this.props.initText}/>;
     }
 
     const title = (this.props.type == "lemma") ? "Lemma" :
@@ -524,7 +517,8 @@ class Level extends React.Component<LevelProps, LevelState> {
 
 
   componentDidMount(){
-    MathJax.Hub.Queue(["Typeset",MathJax.Hub]);
+    if(MathJax)
+      MathJax.Hub.Queue(["Typeset",MathJax.Hub]);
   }
 
   render() {
@@ -539,7 +533,7 @@ class Level extends React.Component<LevelProps, LevelState> {
       }
       else if( itemData.type == "lemma" || itemData.type == "theorem" || itemData.type == "example")
       {
-        var editorProps : LeanEditorProps = {
+        let editorProps : LeanEditorProps = {
           file : this.props.fileName,
           initText : itemData.editorText,
           textBefore : itemData.textBefore,
@@ -550,7 +544,7 @@ class Level extends React.Component<LevelProps, LevelState> {
           onDidCursorMove: this.props.onDidCursorMove
         };
   
-      return <Statement key={i}
+        return <Statement key={i}
                       activate={() => {}}
                       isActive={this.props.levelData.activeIndex == i} 
                       type={itemData.type}
@@ -586,85 +580,73 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
     super(props);
   }
 
-  getStatements(type: string){
+  getSideBarItems(type: string){
 
-    let statements = [];
+    let items = [];
     for(let w = 0; w <= this.props.world; w++){
       for(let l = 0; (w < this.props.world && l < this.props.gameData[w].length) || (w == this.props.world && l < this.props.level); l++){
-        let levelData = gameData[w][l];
+        let levelData = this.props.gameData[w][l];
         for(let i = 0; i < levelData.objects.length; i++){
           if(levelData.objects[i].type == type)
-            statements.push(levelData.objects[i]);
+            items.push(levelData.objects[i]);
         }
       }
     }
 
-    return statements.map((s, i) => {
-      let text = s.lean.trim();
-      let j = text.indexOf(" "), k = text.indexOf(":=");
-      text = text.substring(j+1, k);
-
-      if(type == "example"){
-        k = 30000;
+    if(type == "tactic"){
+      return items.map((s, i) => {
         return (
           <div>
-            <LeanColorize key={k + 2*i} text={s.lean} />
-            <LeanColorize key={k + 2*i+1} text={"begin\n" + s.proof + "\nend"} />
+            <LeanColorize key={type+",name,"+i} text={s.name} />
+            <Text key={type+",text,"+i} content={s.content} />
           </div>
         );
-      } else {
-        let j1 = text.indexOf(" ");   j1 = j1 < 0 ? text.length : j1;
-        let j2 = text.indexOf(":");   j2 = j2 < 0 ? text.length : j2;
-        let j3 = text.indexOf("(");   j3 = j3 < 0 ? text.length : j3;
-        let j4 = text.indexOf("{");   j4 = j4 < 0 ? text.length : j4;
-        j = Math.min(j1, j2, j3, j4);
-        let name = text.substring(0, j), statement = text.substring(j).trim();
-        k = (type == "theorem") ? 10000 : 20000;
+      });
+    }else if(type == "example"){
+      return items.map((s, i) => {
         return (
           <div>
-            <LeanColorize key={k + 2*i} text={name} />
-            <LeanColorize key={k + 2*i+1} text={"  " + statement} />
+            <LeanColorize key={type+",statement,"+i} text={s.lean} />
+            <LeanColorize key={type+",proof,"+i} text={"begin\n" + s.proof + "\nend"} />
           </div>
         );
-      }
-    });
+      });
+    } else {
+      return items.map((s, i) => {
+        return (
+          <div>
+            <LeanColorize key={type+",name,"+i} text={s.name} />
+            <LeanColorize key={type+",statement,"+i} text={"  " + s.statement} />
+          </div>
+        );
+      });
+    }
   }
 
+
   render(){
-    const theorems = this.getStatements("theorem");
-    const lemmas   = this.getStatements("lemma");
-    const examples = this.getStatements("example");
+    const itemTypes = ["tactic", "theorem", "lemma", "example"]
+    const itemTypeLabels = ["Tactics", "Theorems", "Lemmas", "Examples"]
+
+    const sideBarContents = itemTypes.map((type, i) => {
+      return <AccordionItem key={type}>
+        <AccordionItemHeading>
+          <AccordionItemButton>{itemTypeLabels[i]}</AccordionItemButton>
+        </AccordionItemHeading>
+        <AccordionItemPanel>
+          {this.getSideBarItems(type)}
+        </AccordionItemPanel>
+      </AccordionItem>
+    });
 
     return (
       <div style={{fontSize: "small", overflowY: "auto", height: "100%", overflowX: "hidden"}}>
       <Accordion allowMultipleExpanded={true} allowZeroExpanded={true}>
-        <AccordionItem key={0}>
-          <AccordionItemHeading>
-            <AccordionItemButton>Theorems</AccordionItemButton>
-          </AccordionItemHeading>
-          <AccordionItemPanel>
-            {theorems}
-          </AccordionItemPanel>
-        </AccordionItem>
-        <AccordionItem key={1}>
-          <AccordionItemHeading>
-            <AccordionItemButton>Lemmas</AccordionItemButton>
-          </AccordionItemHeading>
-          <AccordionItemPanel>
-            {lemmas}
-          </AccordionItemPanel>
-        </AccordionItem>
-        <AccordionItem key={2}>
-          <AccordionItemHeading>
-            <AccordionItemButton>Examples</AccordionItemButton>
-          </AccordionItemHeading>
-          <AccordionItemPanel>
-            {examples}
-          </AccordionItemPanel>
-        </AccordionItem>
+        {sideBarContents}
       </Accordion>
       </div>
     );
+    
   }
 }
 
@@ -674,8 +656,8 @@ interface GameProps {
   gameData: any;
 }
 interface GameState {
-  activeWorldNumber: number;
-  activeLevelNumber: number;
+  activeWorld: number;
+  activeLevel: number;
   cursor?: Position;
 }
 class Game extends React.Component<GameProps, GameState> {
@@ -683,63 +665,66 @@ class Game extends React.Component<GameProps, GameState> {
   constructor(props: GameProps) {
     super(props);
     this.state = {
-      activeWorldNumber: 0,
-      activeLevelNumber: 0,
+      activeWorld: 0,
+      activeLevel: 0,
     };
   }
 
   goto(world: number, level: number){
-    let levelData = this.props.gameData[this.state.activeWorldNumber][this.state.activeLevelNumber]
+    let levelData = this.props.gameData[this.state.activeWorld][this.state.activeLevel]
     let statementData = levelData.objects[levelData.activeIndex];
 
     if(statementData){
       statementData.editorText = activeEditorData.activeText;
     }
     
-    this.setState({ activeWorldNumber: world, activeLevelNumber: level });
+    this.setState({ activeWorld: world, activeLevel: level });
+    this.props.gameData[world].lastVisitedLevel = level;
+
   }
 
-  gotoWorld(i: number){
-    this.goto(i, 0);
+  gotoWorld(w: number){
+    let l = this.props.gameData[w].lastVisitedLevel;
+    l = l ? l : 0;
+    this.goto(w, l);
   }
 
-  gotoLevel(i: number){
-    this.goto(this.state.activeWorldNumber, i);
+  gotoLevel(l: number){
+    this.goto(this.state.activeWorld, l);
   }
 
   render() {
-    const worldData = this.props.gameData[this.state.activeWorldNumber];
+    const worldData = this.props.gameData[this.state.activeWorld];
 
     const worldButtonsPanel = <div style={{ width: '100%', height: '2em', top: '0', position: 'fixed' }}>
-      <button disabled={ this.state.activeWorldNumber == 0 } 
+      <button disabled={ this.state.activeWorld == 0 } 
         style={{ 
           float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
-        }} onClick={() => { this.gotoWorld.call(this, this.state.activeWorldNumber - 1); }}> Previous World </button>
-      <button disabled={ this.state.activeWorldNumber == this.props.gameData.length - 1 } 
+        }} onClick={() => { this.gotoWorld.call(this, this.state.activeWorld - 1); }}> Previous World </button>
+      <button disabled={ this.state.activeWorld == this.props.gameData.length - 1 } 
         style={{
           float: 'right', borderStyle: 'ridge', width: '20%', height: '100%'
-        }} onClick={() => { this.gotoWorld.call(this, this.state.activeWorldNumber + 1); }}> Next World </button>
-      <div style={{ textAlign: 'center' }}><h3> World {this.state.activeWorldNumber + 1} </h3></div>
+        }} onClick={() => { this.gotoWorld.call(this, this.state.activeWorld + 1); }}> Next World </button>
+      <div style={{ textAlign: 'center' }}><h3> World {this.state.activeWorld + 1} </h3></div>
     </div>;
 
     const levelButtonsPanel = <div style={{ width: '100%', height: '2em', top: '2em', position: 'fixed' }}>
-      <button disabled={ this.state.activeLevelNumber == 0 } 
+      <button disabled={ this.state.activeLevel == 0 } 
         style={{
           float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
-        }} onClick={() => { this.gotoLevel.call(this, this.state.activeLevelNumber - 1); }}> Previous Level </button>
-      <button disabled={ this.state.activeLevelNumber == worldData.length - 1 } 
+        }} onClick={() => { this.gotoLevel.call(this, this.state.activeLevel - 1); }}> Previous Level </button>
+      <button disabled={ this.state.activeLevel == worldData.length - 1 } 
         style={{ 
           float: 'right', borderStyle: 'ridge', width: '20%', height: '100%' 
-        }} onClick={() => { this.gotoLevel.call(this, this.state.activeLevelNumber + 1); }}> Next Level </button>
-      <div style={{ textAlign: 'center' }}><h4> Level {this.state.activeLevelNumber + 1} </h4></div>
+        }} onClick={() => { this.gotoLevel.call(this, this.state.activeLevel + 1); }}> Next Level </button>
+      <div style={{ textAlign: 'center' }}><h4> Level {this.state.activeLevel + 1} </h4></div>
     </div>;
 
 
-    const sideBarDiv = <SideBar gameData={this.props.gameData} world={this.state.activeWorldNumber} level={this.state.activeLevelNumber} ></SideBar>;
+    const sideBarDiv = <SideBar gameData={this.props.gameData} world={this.state.activeWorld} level={this.state.activeLevel} ></SideBar>;
 
-    const key = this.state.activeWorldNumber * 1000 + this.state.activeLevelNumber; // We need a unique key for every level.
-
-    const content = <Level fileName={this.props.fileName} key={key} levelData={worldData[this.state.activeLevelNumber]} 
+    const key = "" + this.state.activeWorld + "," + this.state.activeLevel;
+    const content = <Level fileName={this.props.fileName} key={key} levelData={worldData[this.state.activeLevel]} 
         onDidCursorMove={(c) => {this.setState({cursor: c})}}/>;
 
 
@@ -753,7 +738,7 @@ class Game extends React.Component<GameProps, GameState> {
 
     const levelDiv = (
       <Container style={{ height: '100%' }}>
-        <Section>
+        <Section defaultSize={200}>
           {sideBarDiv}
         </Section>
         <Bar size={10} className="Resizer vertical" />
@@ -794,19 +779,28 @@ const metaPromise = fetch(leanJsOpts.libraryZip.slice(0, -3) + 'info.json')
   .then((res) => res.json())
   .then((j) => info = j);
 
-const gameData = require('game_data');
+window.indexedDB.deleteDatabase("leanlibrary").onsuccess = function(event) {
 
-// tslint:disable-next-line:no-var-requires
-(window as any).require(['vs/editor/editor.main'], () => {
-
-  const fn = monaco.Uri.file('test.lean').fsPath;
-
-  registerLeanLanguage(leanJsOpts, activeEditorData);
+  window.addEventListener("beforeunload", function (e) {
+    let confirmationMessage = 'Do you want to leave this site?'
+                            + '\nYour progress will be lost.';
+    (e || window.event).returnValue = confirmationMessage;
+    return confirmationMessage;
+  });
   
-  render(
-      <Game fileName={fn} gameData={gameData}/>,
-      document.getElementById('root'),
-  );
+  // tslint:disable-next-line:no-var-requires
+  (window as any).require(['vs/editor/editor.main'], () => {
 
-});
-
+    const gameData = require('game_data');
+    const fn = monaco.Uri.file('test.lean').fsPath;
+  
+    registerLeanLanguage(leanJsOpts, activeEditorData);
+    
+    render(
+        <Game fileName={fn} gameData={gameData}/>,
+        document.getElementById('root'),
+    );
+  
+  });
+  
+};

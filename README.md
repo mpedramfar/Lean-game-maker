@@ -24,7 +24,17 @@ begin
 end
 ```
 You can use Markdown in the comments. It will be compiled with [showdown](http://demo.showdownjs.com/).
-Theorems and examples are similar to lemmas. The only difference is that examples are shown with full solution in the webpage, but lemmas and theorems should be solved by the player. If a line in not contained in a comment, lemma, theorem or example. Then it will be shown directly in the game. If such a line ends with ` -- hide`, it will not be shown. Alternatively, you can put a few lines inside blocks of the following format.
+Theorems and examples are similar to lemmas. The only difference is that examples are shown with full solution in the webpage, but lemmas and theorems should be solved by the player. 
+You can also add description of tactics by
+
+```lean
+/- Tactic : name_of_the_tactic
+Description of the tactic
+-/
+```
+This description will be added to the side bar in the next level.
+
+If a line in not contained in a comment, lemma, theorem, example or tactic, it will be shown directly in the game. If such a line ends with ` -- hide`, it will not be shown. Alternatively, you can put a few lines inside blocks of the following format.
 ```lean
 -- begin hide
 ** comment and lean code here **
@@ -37,5 +47,4 @@ make-lean-game
 ```
 
 ### Lean Server
-- To make an interactive webpage, the javascript Lean server is used. In this repository, javascript servers for Lean 3.4.1 and Lean 3.4.2 are provided. If you're working with a different version, you need to add the required files to `src/interactive_interface/lean_server`. You would need three files, named `lean_js_js.js`, `lean_js_wasm.js` and `lean_js_wasm.wasm`.
-- This project uses IndexDB to store some data through the browser. If you're running `make-lean-game` but there are import errors or your changes are not reflected in the imported files, then [delete IndexDB](https://stackoverflow.com/questions/9384128/how-to-delete-indexeddb) and run the webpage again.
+To make an interactive webpage, the javascript Lean server is used. In this repository, javascript servers for Lean 3.4.1 and Lean 3.4.2 are provided. If you're working with a different version, you need to add the required files to `src/interactive_interface/lean_server`. You would need three files, named `lean_js_js.js`, `lean_js_wasm.js` and `lean_js_wasm.wasm`.

@@ -19,6 +19,15 @@ class Text:
     def append(self, line):
         self.content = self.content + line
 
+@dataclass
+class Tactic:
+    type: str = 'tactic'
+    content: str = ''
+
+    def append(self, line):
+        self.content = self.content + line
+
+
     
 @dataclass
 class Bilingual:
@@ -149,6 +158,32 @@ class TextEnd(LineReader):
 
     def run(self, m, file_reader):
         if file_reader.status is not 'text':
+            return False
+        file_reader.reset()
+        return True
+
+class TacticBegin(LineReader):
+    regex = regex.compile(r'\s*/-\s*Tactic\s*:\s*(.*)$')
+
+    def run(self, m, file_reader):
+        if file_reader.status is not '':
+            return False
+        file_reader.status = 'tactic'
+        tactic = Tactic()
+        tactic.name = m.group(1).strip()
+        file_reader.output.append(tactic)
+        def normal_line(file_reader, line):
+            tactic.append(line)
+        file_reader.normal_line_handler = normal_line
+        file_reader.blank_line_handler = normal_line
+        return True
+
+
+class TacticEnd(LineReader):
+    regex = regex.compile(r'-/')
+
+    def run(self, m, file_reader):
+        if file_reader.status is not 'tactic':
             return False
         file_reader.reset()
         return True

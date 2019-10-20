@@ -101,23 +101,18 @@ class interactive_server:
                 f.write('\n')
                 print('Wrote olean map to {0}'.format(map_fn))        
 
-    def download_server(self):
-        base_url='https://leanprover.github.io/live/' + self.toolchain + '/'
-        Path(self.interactive_path / 'lean_server' / self.toolchain).mkdir(exist_ok=True)
+    def server_exists(self):
+        p = Path(self.interactive_path / 'lean_server' / self.toolchain)
+        p.mkdir(exist_ok=True)
         for f in ['lean_js_js.js', 'lean_js_wasm.js', 'lean_js_wasm.wasm']:
-            if not Path(self.interactive_path / 'lean_server' / self.toolchain / f).is_file():
-                try:
-                    urllib.request.urlretrieve(base_url + f, self.interactive_path / 'lean_server' / self.toolchain / f)
-                    if self.debug:
-                        print('Downloaded "{0}"'.format(base_url + f))
-                except:
-                    print('Could not download "{0}". I will make a non-interactive webpage instead.'.format(base_url + f))
-                    return False
+            if not (p / f).is_file():
+                print(f'Could not find the file "{p/f}" which is necessary to run Lean in the browser.')
+                return False
         return True
 
 
     def copy_server(self):
-        if not self.download_server():
+        if not self.server_exists():
             return False
         
         distutils.dir_util.copy_tree(self.interactive_path / 'dist', str(Path(self.outdir)))
