@@ -14,7 +14,6 @@ import lean_game_maker
 from lean_game_maker.line_reader import FileReader
 from lean_game_maker.objects import (HiddenBegin, HiddenEnd, 
     TextBegin, TextEnd,
-    DefinitionBegin, DefinitionEnd, 
     ExampleBegin, ExampleEnd,
     LemmaBegin, LemmaEnd,
     TheoremBegin, TheoremEnd,

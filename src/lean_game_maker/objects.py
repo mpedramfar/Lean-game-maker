@@ -13,7 +13,7 @@ from lean_game_maker.line_reader import LineReader, dismiss_line, LeanLines
 ############
 @dataclass
 class Text:
-    name: str = 'text'
+    type: str = 'text'
     content: str = ''
 
     def append(self, line):
@@ -37,18 +37,18 @@ class Bilingual:
 
 @dataclass
 class Definition(Bilingual):
-    name: str = 'definition'
+    type: str = 'definition'
 
 
 @dataclass
 class ProofLine:
-    name: str = 'proof_line'
+    type: str = 'proof_line'
     lean: str = ''
 
 
 @dataclass
 class ProofItem:
-    name: str = 'proof-item'
+    type: str = 'proof-item'
     text: str = ''
     lines: List[ProofLine] = field(default_factory=list)
 
@@ -57,13 +57,13 @@ class ProofItem:
 
 @dataclass
 class Proof:
-    name: str = 'proof'
+    type: str = 'proof'
     items: List[ProofItem] = field(default_factory=list)
 
 
 @dataclass
 class Lemma(Bilingual):
-    name: str = 'lemma'
+    type: str = 'lemma'
     proof: Proof = field(default_factory=Proof)
 
     def proof_append(self, item):
@@ -72,7 +72,7 @@ class Lemma(Bilingual):
 
 @dataclass
 class Theorem(Bilingual):
-    name: str = 'theorem'
+    type: str = 'theorem'
     proof: Proof = field(default_factory=Proof)
 
     def proof_append(self, item):
@@ -81,11 +81,13 @@ class Theorem(Bilingual):
 
 @dataclass
 class Example(Bilingual):
-    name: str = 'example'
+    type: str = 'example'
     proof: Proof = field(default_factory=Proof)
 
     def proof_append(self, item):
         self.proof.items.append(item)
+
+
 #################
 #  Line readers #
 #################
@@ -104,8 +106,11 @@ class HiddenBegin(LineReader):
     regex = regex.compile(r'-- begin hide\s*')
 
     def run(self, m, file_reader):
+        if file_reader.status is not '':
+            return False
         file_reader.status = 'hidden'
         lean_lines = LeanLines()
+        lean_lines.hidden = True
         file_reader.output.append(lean_lines)
         def normal_line(file_reader, line):
             lean_lines.append(line)
@@ -149,40 +154,12 @@ class TextEnd(LineReader):
         return True
 
 
-class DefinitionBegin(LineReader):
-    regex = regex.compile(r'\s*/-\s*Definition\s*$')
-
-    def run(self, m, file_reader):
-        file_reader.status = 'definition_text'
-        defi = Definition()
-        file_reader.output.append(defi)
-        def normal_line(file_reader, line):
-            defi.text_append(line)
-        file_reader.normal_line_handler = normal_line
-        return True
-
-
-class DefinitionEnd(LineReader):
-    regex = regex.compile(r'-/')
-
-    def run(self, m, file_reader):
-        if file_reader.status is not 'definition_text':
-            return False
-        file_reader.status = 'definition_lean'
-        defi = file_reader.output[-1]
-        def normal_line(file_reader, line):
-            defi.lean_append(line)
-        file_reader.normal_line_handler = normal_line
-        def blank_line(file_reader, line):
-            file_reader.reset()
-        file_reader.blank_line_handler = blank_line
-        return True
-
-
 class LemmaBegin(LineReader):
     regex = regex.compile(r'\s*/-\s*Lemma\s*$')
 
     def run(self, m, file_reader):
+        if file_reader.status is not '':
+            return False
         file_reader.status = 'lemma_text'
         lemma = Lemma()
         file_reader.output.append(lemma)
@@ -210,6 +187,8 @@ class TheoremBegin(LineReader):
     regex = regex.compile(r'\s*/-\s*Theorem\s*$')
 
     def run(self, m, file_reader):
+        if file_reader.status is not '':
+            return False
         file_reader.status = 'theorem_text'
         theorem = Theorem()
         file_reader.output.append(theorem)
@@ -237,6 +216,8 @@ class ExampleBegin(LineReader):
     regex = regex.compile(r'\s*/-\s*Example\s*$')
 
     def run(self, m, file_reader):
+        if file_reader.status is not '':
+            return False
         file_reader.status = 'example_text'
         example = Example()
         file_reader.output.append(example)
@@ -264,6 +245,8 @@ class ProofBegin(LineReader):
     regex = regex.compile(r'^begin\s*') # NOTE : this does not require begin to be on a separate line
 
     def run(self, m, file_reader):
+        if file_reader.status not in ['lemma_lean', 'theorem_lean', 'example_lean']:
+            return False
         file_reader.status = 'proof'
         file_reader.normal_line_handler = dismiss_line # Proofs shouldn't start with normal line
         return True

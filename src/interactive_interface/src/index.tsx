@@ -2,15 +2,32 @@
 import { InfoRecord, LeanJsOpts, Message } from '@bryangingechen/lean-client-js-browser';
 import * as React from 'react';
 import { createPortal, findDOMNode, render } from 'react-dom';
-import * as sp from 'react-split-pane';
 import { allMessages, checkInputCompletionChange, checkInputCompletionPosition, currentlyRunning, delayMs,
   registerLeanLanguage, server, tabHandler, editorTextDataInterface } from './langservice';
-export const SplitPane: any = sp;
+
+import { Container, Section, Bar } from 'react-simple-resizer';
+
+import {
+  Accordion,
+  AccordionItem,
+  AccordionItemHeading,
+  AccordionItemButton,
+  AccordionItemPanel,
+} from 'react-accessible-accordion';
 
 const MathJax = require("MathJax");
 
 const showdown = require("showdown");
-var markdownConverter = new showdown.Converter();
+showdown.extension('targetlink', function() { // open links in new tabs
+  return [{
+    type: 'html',
+    regex: /(<a [^>]+?)(>.*<\/a>)/g,
+    replace: '$1 target="_blank"$2'
+  }];
+});
+var markdownConverter = new showdown.Converter({
+  extensions: ['targetlink']
+});
 
 
 interface LeanStatusProps {
@@ -105,9 +122,16 @@ function MessageWidget({msg}: MessageWidgetProps) {
     <div style={{paddingBottom: '1em'}}>
       <div className='info-header' style={{ color: colorOfSeverity[msg.severity] }}>
         {msg.pos_line}:{msg.pos_col}: {msg.severity}: {msg.caption}</div>
-      <div className='code-block' dangerouslySetInnerHTML={{__html: leanColorize(msg.text)}}/>
+      <LeanColorize text={msg.text}/>
     </div>
   );
+  // return (
+  //   <div style={{paddingBottom: '1em'}}>
+  //     <div className='info-header' style={{ color: colorOfSeverity[msg.severity] }}>
+  //       {msg.pos_line}:{msg.pos_col}: {msg.severity}: {msg.caption}</div>
+  //     <div className='code-block' dangerouslySetInnerHTML={{__html: leanColorize(msg.text)}}/>
+  //   </div>
+  // );
 }
 
 interface Position {
@@ -251,7 +275,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
       (<div key={'goal'}>{GoalWidget(this.state.goal)}</div>);
 
     const goalDiv = (
-      <div style={{overflowY: 'auto', width: '100%', position: 'absolute', top: 0, bottom: 0}}>
+      <div style={{overflowY: 'auto', width: '100%', height: '100%'}}>
         <div style={{ marginRight: '1ex', float: 'right' }}>
           <img src='./display-goal-light.svg' title='Display Goal' />
         </div>
@@ -263,7 +287,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
       (<div key={i}>{MessageWidget({msg})}</div>));
 
     const msgsDiv = (
-      <div style={{overflowY: 'auto', width: '100%', position: 'absolute', top: '1em', bottom: 0}}>
+      <div style={{overflowY: 'auto', width: '100%', height: '100%', boxSizing: 'border-box', paddingTop: '1em'}}>
         <div style={{ marginRight: '1ex', float: 'right' }}>
           <img src='./display-list-light.svg' title='Display Messages' />
         </div>
@@ -272,14 +296,19 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
     );
 
     return ( 
-      <div className='no-mathjax' style={{ position: 'absolute', top: '1em', bottom: '1em', left: '1em', right: '1em'}}>
+      <div className='no-mathjax' style={{ 
+          height: "calc(100% - 2em", width: "calc(100% - 2em",
+          boxSizing: "border-box", margin: "1em" }}>
         <LeanStatus file={this.props.file} isReady={this.checkIfSolved.bind(this)}/>
-        <div>
-          <SplitPane split="horizontal" defaultSize={ window.innerHeight * 0.40 }>
+        <Container vertical={true} style={{ height: '100%' }}>
+          <Section minSize={200}>
             {goalDiv}
+          </Section>
+          <Bar size={10} className="Resizer horizontal" />
+          <Section minSize={200}>
             {msgsDiv}
-          </SplitPane>
-        </div>
+          </Section>
+        </Container>
       </div>
     );
 
@@ -335,7 +364,6 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
     this.model.onDidChangeContent((e) => {
       activeEditorData.activeText = this.model.getValue();
       activeEditorData.activeLeanContent = this.props.textBefore + this.model.getValue() + this.props.textAfter;
-      console.log("activeEditorData = ", activeEditorData);
       checkInputCompletionChange(e, this.editor, this.model);
     });
 
@@ -413,6 +441,8 @@ class Text extends React.Component<TextProps, {}> {
 }
 
 
+
+
 interface StatementProps extends LeanEditorProps {
   text: string;
   lean: string;
@@ -433,7 +463,7 @@ class Statement extends React.Component<StatementProps, {}> {
     if( this.props.isActive ){
       proof = <LeanEditor {...this.props} />;
     } else {
-      proof = <LeanColorize text={"  sorry"}/>; // replace it with the proof
+      proof = <LeanColorize text={this.props.initText}/>; // replace it with the proof
     }
 
     const title = (this.props.type == "lemma") ? "Lemma" :
@@ -453,9 +483,14 @@ class Statement extends React.Component<StatementProps, {}> {
 	          <LeanColorize text={this.props.lean} />
     	    </div>
         </div>
-        <LeanColorize text="begin"/>
-        {proof}
-        <LeanColorize text="end"/>
+        <div style={{ marginTop:"0.5em" }}>
+          <span style={{ fontStyle:"italic" }}>Proof :</span>
+        </div>
+        <div className="lemma_proof" >
+          <LeanColorize text="begin"/>
+          {proof}
+          <LeanColorize text="end"/>
+        </div>
       </div>;
 
   }
@@ -479,78 +514,14 @@ class Level extends React.Component<LevelProps, LevelState> {
 
     let i = 0;
     for(; i < this.props.levelData.objects.length; i++){
-      if(this.props.levelData.objects[i].name == "lemma" || this.props.levelData.objects[i].name == "theorem")
+      if(this.props.levelData.objects[i].type == "lemma" || this.props.levelData.objects[i].type == "theorem")
         break;
     }
 
     this.props.levelData.activeIndex = (i < this.props.levelData.objects.length) ? i : -1;
 
-    this.initEditorData.call(this);
   }
 
-  initEditorData(){ // This function could be done in the python code
-    var rawText   = this.props.levelData.raw_text + "\n";
-
-    function nthIndex(str: string, pat: string, n: number) {
-      var L = str.length, i = -1;
-      while (n-- && i++ < L) {
-        i = str.indexOf(pat, i);
-        if (i < 0) break;
-      }
-      return i;
-    }
-  
-    this.props.levelData.objects.map( (itemData, i) => {
-      var startIndex       = nthIndex(rawText, "\n", itemData.firstLineNumber - 1) + 1;
-      var endIndex         = nthIndex(rawText, "\n", itemData.lastLineNumber) + 1;
-  
-      itemData.rawText     = rawText.substring(startIndex, endIndex);
-      if(i == 0)
-        this.props.levelData.header  = rawText.substring(0, startIndex);
-
-      if( itemData.name == "lemma" || itemData.name == "theorem" ) {
-        var proofStartIndex = nthIndex(rawText, "\n", itemData.firstProofLineNumber - 1) + 1;
-        var proofEndIndex   = nthIndex(rawText, "\n", itemData.lastProofLineNumber);
-
-        itemData.leanBeforeProof   = rawText.substring(startIndex, proofStartIndex);
-        itemData.proof             = rawText.substring(proofStartIndex, proofEndIndex); 
-        itemData.leanAfterProof    = rawText.substring(proofEndIndex, endIndex);
-
-        if( itemData.editorText == undefined )
-          itemData.editorText      = "sorry";   // if changed to "itemData.proof", it will show the all the proofs in the beginning
-
-        itemData.height            = itemData.proof.split(/\r\n|\r|\n/).length;
-
-        itemData.rawText           = itemData.leanBeforeProof + itemData.editorText + itemData.leanAfterProof;
-
-      }
-    });
-
-    this.updateEditorData.call(this);
-  }
-
-  
-  updateEditorData(){
-    var levelItems = this.props.levelData.objects;
-
-    levelItems.map( (itemData, i) => {
-      itemData.textBefore = this.props.levelData.header
-      for(var j = 0; j < i; j++)
-        itemData.textBefore += levelItems[j].rawText;
-      if(itemData.name == "lemma" || itemData.name == "theorem"){
-        itemData.textBefore += itemData.leanBeforeProof;
-        itemData.lineOffset = itemData.textBefore.split(/\r\n|\r|\n/).length - 1; // number of lines
-      }
-        
-      itemData.textAfter = "";
-      for(var j = levelItems.length - 1; j > i; j--)
-        itemData.textAfter = levelItems[j].rawText + itemData.textAfter;
-      if(itemData.name == "lemma" || itemData.name == "theorem")
-        itemData.textAfter = itemData.leanAfterProof + itemData.textAfter;
-
-    });
-
-  }
 
   componentDidMount(){
     MathJax.Hub.Queue(["Typeset",MathJax.Hub]);
@@ -558,15 +529,15 @@ class Level extends React.Component<LevelProps, LevelState> {
 
   render() {
     const content = this.props.levelData.objects.map( (itemData, i) => {
-      if( itemData.name == "text" )
+      if( itemData.type == "text" )
       {
         return <Text  key={i} content={itemData.content}  />;
       } 
-      else if( itemData.name == "lean" && (! itemData.hidden))
+      else if( itemData.type == "lean" && (! itemData.hidden))
       {
         return <LeanColorize key={i} text={itemData.lean}/>
       }
-      else if( itemData.name == "lemma" || itemData.name == "theorem" || itemData.name == "example")
+      else if( itemData.type == "lemma" || itemData.type == "theorem" || itemData.type == "example")
       {
         var editorProps : LeanEditorProps = {
           file : this.props.fileName,
@@ -575,14 +546,14 @@ class Level extends React.Component<LevelProps, LevelState> {
           textAfter : itemData.textAfter,
           lineOffset : itemData.lineOffset,
           height : itemData.height,
-          readonly: itemData.name == "example",
+          readonly: itemData.type == "example",
           onDidCursorMove: this.props.onDidCursorMove
         };
   
       return <Statement key={i}
                       activate={() => {}}
                       isActive={this.props.levelData.activeIndex == i} 
-                      type={itemData.name}
+                      type={itemData.type}
                       solved={itemData.status == "solved"}
                       text={itemData.text}
                       lean={itemData.lean}
@@ -591,7 +562,109 @@ class Level extends React.Component<LevelProps, LevelState> {
       };
     });
 
-    return <div>{content}</div>;
+    return <div style={{
+      width: '100%',
+      height: '100%',
+      boxSizing: 'border-box',
+      padding: '1em',
+      borderStyle: 'double',
+      overflowY: 'auto'}}>{content}</div>;
+  }
+}
+
+
+interface SideBarProps {
+  gameData: any;
+  world: number;
+  level: number;
+}
+interface SideBarState {
+}
+class SideBar extends React.Component<SideBarProps, SideBarState> {
+
+  constructor(props: SideBarProps) {
+    super(props);
+  }
+
+  getStatements(type: string){
+
+    let statements = [];
+    for(let w = 0; w <= this.props.world; w++){
+      for(let l = 0; (w < this.props.world && l < this.props.gameData[w].length) || (w == this.props.world && l < this.props.level); l++){
+        let levelData = gameData[w][l];
+        for(let i = 0; i < levelData.objects.length; i++){
+          if(levelData.objects[i].type == type)
+            statements.push(levelData.objects[i]);
+        }
+      }
+    }
+
+    return statements.map((s, i) => {
+      let text = s.lean.trim();
+      let j = text.indexOf(" "), k = text.indexOf(":=");
+      text = text.substring(j+1, k);
+
+      if(type == "example"){
+        k = 30000;
+        return (
+          <div>
+            <LeanColorize key={k + 2*i} text={s.lean} />
+            <LeanColorize key={k + 2*i+1} text={"begin\n" + s.proof + "\nend"} />
+          </div>
+        );
+      } else {
+        let j1 = text.indexOf(" ");   j1 = j1 < 0 ? text.length : j1;
+        let j2 = text.indexOf(":");   j2 = j2 < 0 ? text.length : j2;
+        let j3 = text.indexOf("(");   j3 = j3 < 0 ? text.length : j3;
+        let j4 = text.indexOf("{");   j4 = j4 < 0 ? text.length : j4;
+        j = Math.min(j1, j2, j3, j4);
+        let name = text.substring(0, j), statement = text.substring(j).trim();
+        k = (type == "theorem") ? 10000 : 20000;
+        return (
+          <div>
+            <LeanColorize key={k + 2*i} text={name} />
+            <LeanColorize key={k + 2*i+1} text={"  " + statement} />
+          </div>
+        );
+      }
+    });
+  }
+
+  render(){
+    const theorems = this.getStatements("theorem");
+    const lemmas   = this.getStatements("lemma");
+    const examples = this.getStatements("example");
+
+    return (
+      <div style={{fontSize: "small", overflowY: "auto", height: "100%", overflowX: "hidden"}}>
+      <Accordion allowMultipleExpanded={true} allowZeroExpanded={true}>
+        <AccordionItem key={0}>
+          <AccordionItemHeading>
+            <AccordionItemButton>Theorems</AccordionItemButton>
+          </AccordionItemHeading>
+          <AccordionItemPanel>
+            {theorems}
+          </AccordionItemPanel>
+        </AccordionItem>
+        <AccordionItem key={1}>
+          <AccordionItemHeading>
+            <AccordionItemButton>Lemmas</AccordionItemButton>
+          </AccordionItemHeading>
+          <AccordionItemPanel>
+            {lemmas}
+          </AccordionItemPanel>
+        </AccordionItem>
+        <AccordionItem key={2}>
+          <AccordionItemHeading>
+            <AccordionItemButton>Examples</AccordionItemButton>
+          </AccordionItemHeading>
+          <AccordionItemPanel>
+            {examples}
+          </AccordionItemPanel>
+        </AccordionItem>
+      </Accordion>
+      </div>
+    );
   }
 }
 
@@ -621,8 +694,6 @@ class Game extends React.Component<GameProps, GameState> {
 
     if(statementData){
       statementData.editorText = activeEditorData.activeText;
-      statementData.rawText = statementData.leanBeforeProof + statementData.proof 
-               + statementData.leanAfterProof; // We don't want any errors from inactive items and we want to use them in our proofs
     }
     
     this.setState({ activeWorldNumber: world, activeLevelNumber: level });
@@ -664,6 +735,8 @@ class Game extends React.Component<GameProps, GameState> {
     </div>;
 
 
+    const sideBarDiv = <SideBar gameData={this.props.gameData} world={this.state.activeWorldNumber} level={this.state.activeLevelNumber} ></SideBar>;
+
     const key = this.state.activeWorldNumber * 1000 + this.state.activeLevelNumber; // We need a unique key for every level.
 
     const content = <Level fileName={this.props.fileName} key={key} levelData={worldData[this.state.activeLevelNumber]} 
@@ -678,33 +751,31 @@ class Game extends React.Component<GameProps, GameState> {
         
     const infoViewDiv = <InfoView file={this.props.fileName} cursor={this.state.cursor} isSolved={() => {}}/>;
 
-    const divStyle = {
-      position: 'absolute',
-      top: 0, bottom: 0,
-      left: 0, right: 0,
-      padding: '1em',
-      borderStyle: 'double'
-    } as React.CSSProperties;
+    const levelDiv = (
+      <Container style={{ height: '100%' }}>
+        <Section>
+          {sideBarDiv}
+        </Section>
+        <Bar size={10} className="Resizer vertical" />
+        <Section minSize={200}>
+          {content}
+        </Section>
+        <Bar size={10} className="Resizer vertical" />
+        <Section minSize={200}>
+          {infoViewDiv}
+        </Section>
+      </Container>
+    );
 
     return (
       <div>
         {worldButtonsPanel}
         {levelButtonsPanel}
-        <div style={{ position: 'fixed', top: '5em', bottom: '1em', left: '1em', right: '1em'}}> 
-          <SplitPane split='vertical' defaultSize={ window.innerWidth * 0.6 }>
-            <div style={{
-              ...divStyle,
-              overflowY: 'scroll',
-            }}> 
-              {content}
-            </div>
-            <div style={divStyle}>
-              {infoViewDiv}
-            </div>
-          </SplitPane>
+        <div style={{ position: 'fixed', top: '5em', bottom: '1em', left: '1em', right: '1em'}} > 
+          {levelDiv}
         </div>
       </div>
-    );
+    );  
   }
 }
 

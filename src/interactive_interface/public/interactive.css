@@ -7,7 +7,7 @@ body {
     font-family: monospace;
     white-space: pre-wrap;
     overflow-wrap: break-word;
-    margin-top: 1em;
+    margin-top: 0.5em;
     font-size: 110%;
 }
 
@@ -172,57 +172,22 @@ input[type='checkbox']#collapsible  {
 }
 
 .Resizer {
-    -moz-box-sizing: border-box;
-    -webkit-box-sizing: border-box;
-    box-sizing: border-box;
-    background: #000;
-    opacity: .2;
     z-index: 1;
-    -moz-background-clip: padding;
-    -webkit-background-clip: padding;
-    background-clip: padding-box;
+    background-color: #ccc;
 }
 
 .Resizer:hover {
-    -webkit-transition: all 2s ease;
-    transition: all 2s ease;
+    background-color: #999;
 }
 
 .Resizer.horizontal {
-    background-color: gray;
-    height: 11px;
-    margin: 5px 0;
-    border-top: 5px solid rgba(255, 255, 255, 0);
-    border-bottom: 5px solid rgba(255, 255, 255, 0);
     cursor: row-resize;
-    width: 100%;
-}
-
-.Resizer.horizontal:hover {
-    border-top: 5px solid rgba(0, 0, 0, 0.5);
-    border-bottom: 5px solid rgba(0, 0, 0, 0.5);
 }
 
 .Resizer.vertical {
-    background-color: gray;
-    width: 11px;
-    border-left: 5px solid rgba(255, 255, 255, 0);
-    border-right: 5px solid rgba(255, 255, 255, 0);
     cursor: col-resize;
 }
 
-.Resizer.vertical:hover {
-    border-left: 5px solid rgba(0, 0, 0, 0.5);
-    border-right: 5px solid rgba(0, 0, 0, 0.5);
-}
-
-.Pane.horizontal.Pane2 {
-    border-top: 1px solid gray;
-}
-
-.Pane.vertical.Pane2 {
-    border-left: 1px solid gray;
-}
 
 
 /*  ------------------------    */
@@ -327,6 +292,12 @@ html {
     padding-left: 0.5rem;
     border-left: 0.15rem solid black;
   }
+
+  div.lemma_proof {
+    margin-left: 0.5rem;
+    padding-left: 0.5rem;
+    border-left: 0.15rem solid black;
+  }
   
   /* TODO : change div.lemma_lean ! */
   div.lemma_lean {
@@ -351,3 +322,62 @@ html {
     display: none;
   }
     
+/* -------------------------------------- */
+
+.accordion {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+}
+
+.accordion__item + .accordion__item {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.accordion__button {
+  background-color: #f4f4f4;
+  color: #444;
+  cursor: pointer;
+  padding: 18px;
+  width: 100%;
+  text-align: left;
+  border: none;
+}
+
+.accordion__button:hover {
+  background-color: #ddd;
+}
+
+.accordion__button:before {
+  display: inline-block;
+  content: '';
+  height: 10px;
+  width: 10px;
+  margin-right: 12px;
+  border-bottom: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.accordion__button[aria-expanded='true']::before,
+.accordion__button[aria-selected='true']::before {
+  transform: rotate(45deg);
+}
+
+.accordion__panel {
+  padding: 20px;
+  animation: fadein 0.35s ease-in;
+}
+
+/* -------------------------------------------------- */
+/* ---------------- Animation part ------------------ */
+/* -------------------------------------------------- */
+
+@keyframes fadein {
+  0% {
+      opacity: 0;
+  }
+
+  100% {
+      opacity: 1;
+  }
+}

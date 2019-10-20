@@ -57,7 +57,7 @@ Install [`nodejs`](https://nodejs.org/en/download/) and clone the repository. In
 ```bash
 cd src/interactive_interface
 npm install .
-./node_modules/.bin/webpack
+./node_modules/.bin/webpack --mode=production
 cd ../..
 
 pip3 install -e .

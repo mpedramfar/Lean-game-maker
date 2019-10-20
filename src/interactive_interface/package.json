@@ -9,26 +9,29 @@
   "author": "Mohammad Pedramfar",
   "license": "Apache-2.0",
   "dependencies": {
-    "@bryangingechen/lean-client-js-browser": "^1.3.1",
-    "@types/node": "^9.4.6",
-    "@types/react": "16.8.17",
-    "@types/react-dom": "16.8.0",
+    "@bryangingechen/lean-client-js-browser": "^1.3.2",
+    "@types/node": "^12.11.1",
+    "@types/react": "^16.9.9",
+    "@types/react-dom": "^16.9.2",
     "ajv": "^6.10.0",
-    "monaco-editor": "0.10.1",
-    "react": "16.2.0",
-    "react-dom": "16.2.1",
-    "react-split-pane": "0.1.77",
-    "showdown": "^1.9.0"
+    "monaco-editor": "^0.10.1",
+    "react": "^16.10.2",
+    "react-accessible-accordion": "^3.0.0",
+    "react-dom": "^16.10.2",
+    "react-simple-resizer": "^2.0.0",
+    "showdown": "^1.9.0",
+    "terser-webpack-plugin": "^2.1.3",
+    "terser-webpack-plugin-legacy": "^1.2.3"
   },
   "devDependencies": {
-    "copy-webpack-plugin": "^4.4.1",
-    "html-webpack-plugin": "^2.30.1",
-    "terser-webpack-plugin-legacy": "^1.2.3",
-    "ts-loader": "^3.5.0",
+    "copy-webpack-plugin": "^5.0.4",
+    "html-webpack-plugin": "^3.2.0",
+    "ts-loader": "^6.2.0",
     "tslint": "^5.9.1",
-    "typescript": "^2.7.1",
-    "webpack": "^3.11.0",
-    "webpack-dev-server": "^2.11.1",
-    "worker-loader": "^1.1.0"
+    "typescript": "^3.6.4",
+    "webpack": "^4.41.2",
+    "webpack-cli": "^3.3.9",
+    "webpack-dev-server": "^3.8.2",
+    "worker-loader": "^2.0.0"
   }
 }

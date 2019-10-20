@@ -15,7 +15,7 @@ def dismiss_line(file_reader, line):
 
 @dataclass
 class LeanLines:
-    name: str = 'lean'
+    type: str = 'lean'
     lean: str = ''
 
     def append(self, line):
@@ -52,7 +52,7 @@ class FileReader:
                     self.output[-1].lastLineNumber = self.cur_line_nb
                 for reader in self.readers:
                     if reader.read(self, line):
-                        if len(self.output) > 0 and ('firstLineNumber' not in dir(self.output[-1])):
+                        if len(self.output) > 0 and not hasattr(self.output[-1], 'firstLineNumber'):
                             self.output[-1].firstLineNumber = self.cur_line_nb
                             self.output[-1].lastLineNumber = self.cur_line_nb
                         if reader.__class__.__name__ == 'ProofBegin':
@@ -74,6 +74,16 @@ class FileReader:
                         self.normal_line_handler(self, line)
                 
                 self.cur_line_nb += 1
+
+            lines = self.raw_text.split("\n")
+            for o in self.output:
+                if hasattr(o, "firstProofLineNumber"):
+                    o.textBefore = "\n".join(lines[ : o.firstProofLineNumber-1]) + "\n"
+                    o.proof      = "\n".join(lines[o.firstProofLineNumber-1 : o.lastProofLineNumber])
+                    o.textAfter  = "\n" + "\n".join(lines[o.lastProofLineNumber : ])
+                    o.height     = o.lastProofLineNumber - o.firstProofLineNumber + 1
+                    o.editorText = o.proof if (o.type == "example") else "sorry"
+                    o.lineOffset = o.firstProofLineNumber-1
 
 class LineReader:
     regex = regex.compile(r'.*')
