@@ -12,7 +12,8 @@ import jsonpickle
 
 import lean_game_maker
 from lean_game_maker.line_reader import FileReader
-from lean_game_maker.objects import (HiddenBegin, HiddenEnd, 
+from lean_game_maker.objects import (default_line_handler, 
+    HiddenBegin, HiddenEnd, 
     TextBegin, TextEnd,
     TacticBegin, TacticEnd,
     ExampleBegin, ExampleEnd,
@@ -60,14 +61,14 @@ def render_lean_project(outdir=None, debug=False):
 
 
 
-    lecture_reader = FileReader([HiddenBegin, HiddenEnd,
+    lecture_reader = FileReader(default_line_handler,
+            [HiddenBegin, HiddenEnd,
              TextBegin, TextEnd,
              TacticBegin, TacticEnd,
              ExampleBegin, ExampleEnd,
              LemmaBegin, LemmaEnd,
              TheoremBegin, TheoremEnd,
-             ProofBegin, ProofEnd, 
-             ])
+             ProofBegin, ProofEnd ])
     
     
     game_data = []

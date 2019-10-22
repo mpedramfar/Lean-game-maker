@@ -24,15 +24,28 @@ begin
 end
 ```
 You can use Markdown in the comments. It will be compiled with [showdown](http://demo.showdownjs.com/).
-Theorems and examples are similar to lemmas. The only difference is that examples are shown with full solution in the webpage, but lemmas and theorems should be solved by the player. 
-You can also add description of tactics by
+Theorems and examples are similar to lemmas. The only difference is that examples are shown with full solution in the webpage, but lemmas and theorems should be solved by the player.
+Every theorem, lemma or example will be added to the side bar in the following levels.
+To prevent a lemma from appearing in the side bar, use the following format :
+
+```lean
+/- Lemma : no-side-bar
+Description of the lemma
+-/
+lemma ... :=
+begin
+  ...
+end
+```
+The same goes for theorems and examples.
+You can also add description of tactics to the side bar by
 
 ```lean
 /- Tactic : name_of_the_tactic
 Description of the tactic
 -/
 ```
-This description will be added to the side bar in the next level.
+This description will be in the side bar from that level onward.
 
 If a line in not contained in a comment, lemma, theorem, example or tactic, it will be shown directly in the game. If such a line ends with ` -- hide`, it will not be shown. Alternatively, you can put a few lines inside blocks of the following format.
 ```lean

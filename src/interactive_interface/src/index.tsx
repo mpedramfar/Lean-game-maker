@@ -584,10 +584,12 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
 
     let items = [];
     for(let w = 0; w <= this.props.world; w++){
-      for(let l = 0; (w < this.props.world && l < this.props.gameData[w].length) || (w == this.props.world && l < this.props.level); l++){
+      for(let l = 0; (w < this.props.world && l < this.props.gameData[w].length) 
+                        || (w == this.props.world && l < this.props.level)
+                        || (w == this.props.world && l == this.props.level && type == "tactic"); l++){
         let levelData = this.props.gameData[w][l];
         for(let i = 0; i < levelData.objects.length; i++){
-          if(levelData.objects[i].type == type)
+          if(levelData.objects[i].type == type && levelData.objects[i].side_bar == true)
             items.push(levelData.objects[i]);
         }
       }
@@ -599,6 +601,7 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
           <div>
             <LeanColorize key={type+",name,"+i} text={s.name} />
             <Text key={type+",text,"+i} content={s.content} />
+            <hr/>
           </div>
         );
       });
@@ -608,6 +611,7 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
           <div>
             <LeanColorize key={type+",statement,"+i} text={s.lean} />
             <LeanColorize key={type+",proof,"+i} text={"begin\n" + s.proof + "\nend"} />
+            <hr/>
           </div>
         );
       });
@@ -617,6 +621,7 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
           <div>
             <LeanColorize key={type+",name,"+i} text={s.name} />
             <LeanColorize key={type+",statement,"+i} text={"  " + s.statement} />
+            <hr/>
           </div>
         );
       });
@@ -736,7 +741,7 @@ class Game extends React.Component<GameProps, GameState> {
         
     const infoViewDiv = <InfoView file={this.props.fileName} cursor={this.state.cursor} isSolved={() => {}}/>;
 
-    const levelDiv = (
+    const mainDiv = (
       <Container style={{ height: '100%' }}>
         <Section defaultSize={200}>
           {sideBarDiv}
@@ -757,7 +762,7 @@ class Game extends React.Component<GameProps, GameState> {
         {worldButtonsPanel}
         {levelButtonsPanel}
         <div style={{ position: 'fixed', top: '5em', bottom: '1em', left: '1em', right: '1em'}} > 
-          {levelDiv}
+          {mainDiv}
         </div>
       </div>
     );  
@@ -782,7 +787,7 @@ const metaPromise = fetch(leanJsOpts.libraryZip.slice(0, -3) + 'info.json')
 window.indexedDB.deleteDatabase("leanlibrary").onsuccess = function(event) {
 
   window.addEventListener("beforeunload", function (e) {
-    let confirmationMessage = 'Do you want to leave this site?'
+    let confirmationMessage = 'Do you want to leave the game?'
                             + '\nYour progress will be lost.';
     (e || window.event).returnValue = confirmationMessage;
     return confirmationMessage;

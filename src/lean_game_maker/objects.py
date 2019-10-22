@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
-from typing import List
-from dataclasses import dataclass, field
-import sys
-
+from dataclasses import dataclass
 import regex
 
-from lean_game_maker.line_reader import LineReader, dismiss_line, LeanLines
+from lean_game_maker.line_reader import LineReader, dismiss_line
 
 
 ############
@@ -17,7 +14,16 @@ class Text:
     content: str = ''
 
     def append(self, line):
-        self.content = self.content + line
+        self.content += line
+
+@dataclass
+class LeanLines:
+    type: str = 'lean'
+    lean: str = ''
+
+    def append(self, line):
+        self.lean += line
+
 
 @dataclass
 class Tactic:
@@ -25,7 +31,7 @@ class Tactic:
     content: str = ''
 
     def append(self, line):
-        self.content = self.content + line
+        self.content += line
 
 
     
@@ -45,71 +51,31 @@ class Bilingual:
 
 
 @dataclass
-class Definition(Bilingual):
-    type: str = 'definition'
-
-
-@dataclass
-class ProofLine:
-    type: str = 'proof_line'
-    lean: str = ''
-
-
-@dataclass
-class ProofItem:
-    type: str = 'proof-item'
-    text: str = ''
-    lines: List[ProofLine] = field(default_factory=list)
-
-    def text_append(self, line):
-        self.text = self.text + line
-
-@dataclass
-class Proof:
-    type: str = 'proof'
-    items: List[ProofItem] = field(default_factory=list)
-
-
-@dataclass
 class Lemma(Bilingual):
     type: str = 'lemma'
-    proof: Proof = field(default_factory=Proof)
-
-    def proof_append(self, item):
-        self.proof.items.append(item)
 
 
 @dataclass
 class Theorem(Bilingual):
     type: str = 'theorem'
-    proof: Proof = field(default_factory=Proof)
-
-    def proof_append(self, item):
-        self.proof.items.append(item)
 
 
 @dataclass
 class Example(Bilingual):
     type: str = 'example'
-    proof: Proof = field(default_factory=Proof)
 
-    def proof_append(self, item):
-        self.proof.items.append(item)
 
+#################
+
+def default_line_handler(file_reader, line):
+    l = LeanLines()
+    l.append(line)
+    l.hidden = True if regex.compile(r'^[\s\S]*--\s*hide\s*$').match(line) else False
+    file_reader.output.append(l)
 
 #################
 #  Line readers #
 #################
-class HiddenLine(LineReader):
-    regex = regex.compile(r'^[\s\S]*--\s*hide\s*$')
-
-    def run(self, m, file_reader):
-        hidden_line = LeanLines()
-        hidden_line.append(m.string)
-        hidden_line.hidden = True
-        self.output.append(hidden_line)
-        return True
-
 
 class HiddenBegin(LineReader):
     regex = regex.compile(r'-- begin hide\s*')
@@ -190,13 +156,14 @@ class TacticEnd(LineReader):
 
 
 class LemmaBegin(LineReader):
-    regex = regex.compile(r'\s*/-\s*Lemma\s*$')
+    regex = regex.compile(r'\s*/-\s*Lemma\s*:?(.*)$')
 
     def run(self, m, file_reader):
         if file_reader.status is not '':
             return False
         file_reader.status = 'lemma_text'
         lemma = Lemma()
+        lemma.side_bar = not (m.group(1).strip() == 'no-side-bar')
         file_reader.output.append(lemma)
         def normal_line(file_reader, line):
             lemma.text_append(line)
@@ -219,13 +186,14 @@ class LemmaEnd(LineReader):
 
 
 class TheoremBegin(LineReader):
-    regex = regex.compile(r'\s*/-\s*Theorem\s*$')
+    regex = regex.compile(r'\s*/-\s*Theorem\s*:?(.*)$')
 
     def run(self, m, file_reader):
         if file_reader.status is not '':
             return False
         file_reader.status = 'theorem_text'
         theorem = Theorem()
+        theorem.side_bar = not (m.group(1).strip() == 'no-side-bar')
         file_reader.output.append(theorem)
         def normal_line(file_reader, line):
             theorem.text_append(line)
@@ -248,13 +216,14 @@ class TheoremEnd(LineReader):
 
 
 class ExampleBegin(LineReader):
-    regex = regex.compile(r'\s*/-\s*Example\s*$')
+    regex = regex.compile(r'\s*/-\s*Example\s*:?(.*)$')
 
     def run(self, m, file_reader):
         if file_reader.status is not '':
             return False
         file_reader.status = 'example_text'
         example = Example()
+        example.side_bar = not (m.group(1).strip() == 'no-side-bar')
         file_reader.output.append(example)
         def normal_line(file_reader, line):
             example.text_append(line)
