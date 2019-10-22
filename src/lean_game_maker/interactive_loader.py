@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 import zipfile, subprocess, json, re
-import glob, shutil, distutils
-import urllib.request
+import glob, distutils
 from pathlib import Path
 
 
 
 class interactive_server:
-    def __init__(self, interactive_path, paths, toolchain, source_lib, outdir, debug = False):
+    def __init__(self, interactive_path, paths, toolchain, outdir):
         self.interactive_path = interactive_path
         self.paths = paths
         self.toolchain = toolchain
         self.outdir = outdir
-        self.source_lib = source_lib
-        self.debug = debug
 
 
     def make_library(self):
@@ -111,7 +108,7 @@ class interactive_server:
         return True
 
 
-    def copy_server(self):
+    def copy_files(self):
         if not self.server_exists():
             return False
         

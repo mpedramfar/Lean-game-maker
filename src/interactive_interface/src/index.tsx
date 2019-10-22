@@ -137,7 +137,7 @@ interface GoalWidgetProps {
   position: Position;
 }
 
-function GoalWidget({goal, position}: GoalWidgetProps) {
+function GoalWidget({goal, position}: GoalWidgetProps, solved: boolean) {
   const tacticHeader = goal.text && <div className='info-header'>
     {position.line}:{position.column}: tactic {
       <span className='code-block' style={{fontWeight: 'normal', display: 'inline'}}>{goal.text}</span>}</div>;
@@ -151,10 +151,12 @@ function GoalWidget({goal, position}: GoalWidgetProps) {
     && <div className='code-block'
     dangerouslySetInnerHTML={{__html: leanColorize(goal.type) + (!goal.doc && '<br />')}}/>;
 
-  const goalStateHeader = goal.state && <div className='info-header'>
+  const goalState = (solved && goal.state == "no goals") ? "Problem Complete!" : goal.state;
+
+  const goalStateHeader = goalState && <div className='info-header'>
     {position.line}:{position.column}: goal</div>;
-  const goalStateBody = goal.state && <div className='code-block'
-    dangerouslySetInnerHTML={{__html: leanColorize(goal.state) + '<br/>'}} />;
+  const goalStateBody = goalState && <div className='code-block'
+    dangerouslySetInnerHTML={{__html: leanColorize(goalState) + '<br/>'}} />;
 
   return (
     // put tactic state first so that there's less jumping around when the cursor moves
@@ -203,14 +205,17 @@ interface InfoViewProps {
 interface InfoViewState {
   goal?: GoalWidgetProps;
   messages: Message[];
+  solved?: boolean;
 }
 class InfoView extends React.Component<InfoViewProps, InfoViewState> {
   private subscriptions: monaco.IDisposable[] = [];
+  private sceduleCheckIfSolved: boolean = false;
 
   constructor(props: InfoViewProps) {
     super(props);
     this.state = {
-      messages: []
+      messages: [],
+      solved: false
     };
   }
   componentWillMount() {
@@ -245,8 +250,15 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
   }
 
   checkIfSolved(){
-    if( this.state.messages.filter((v) => (v.severity =='error' || v.severity == 'warning')).length == 0 )
-      this.props.isSolved();
+    if(this.sceduleCheckIfSolved){
+      if( this.state.messages.filter((v) => (v.severity =='error' || v.severity == 'warning')).length == 0 ){
+        this.props.isSolved();
+        this.setState({ solved : true });
+      } else {
+        this.setState({ solved : false });
+      }
+      this.sceduleCheckIfSolved = false;
+    }
   }
 
   refreshGoal(nextProps?: InfoViewProps) {
@@ -260,17 +272,18 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
     const position = nextProps.cursor;
     server.info(nextProps.file, position.line, position.column).then((res) => {
       this.setState({goal: res.record && { goal: res.record, position }});
+      this.checkIfSolved();
     });
   }
 
   render() {
     const goal = this.state.goal &&
-      (<div key={'goal'}>{GoalWidget(this.state.goal)}</div>);
+      (<div key={'goal'}>{GoalWidget(this.state.goal, this.state.solved)}</div>);
 
     const goalDiv = (
       <div style={{overflowY: 'auto', width: '100%', height: '100%'}}>
         <div style={{ marginRight: '1ex', float: 'right' }}>
-          <img src='./display-goal-light.svg' title='Display Goal' />
+          <img src='./display-goal-light.svg' title='Goals' />
         </div>
         {goal}
       </div>
@@ -282,7 +295,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
     const msgsDiv = (
       <div style={{overflowY: 'auto', width: '100%', height: '100%', boxSizing: 'border-box', paddingTop: '1em'}}>
         <div style={{ marginRight: '1ex', float: 'right' }}>
-          <img src='./display-list-light.svg' title='Display Messages' />
+          <img src='./display-list-light.svg' title='Messages' />
         </div>
         {msgs}
       </div>
@@ -290,9 +303,9 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
 
     return ( 
       <div className='no-mathjax' style={{ 
-          height: "calc(100% - 2em", width: "calc(100% - 2em",
-          boxSizing: "border-box", margin: "1em" }}>
-        <LeanStatus file={this.props.file} isReady={this.checkIfSolved.bind(this)}/>
+          height: "100%", width: "100%", boxSizing: "border-box",
+          padding: "1em", border: "double" }}>
+        <LeanStatus file={this.props.file} isReady={() => {this.sceduleCheckIfSolved = true;}}/>
         <Container vertical={true} style={{ height: '100%' }}>
           <Section minSize={200}>
             {goalDiv}
@@ -580,74 +593,85 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
     super(props);
   }
 
-  getSideBarItems(type: string){
 
-    let items = [];
+  render(){
+
+    let tactics = [], statements = [], examples = [];
     for(let w = 0; w <= this.props.world; w++){
+      statements.push([]);   // "statements" is a 2D array, first dimension is the world
       for(let l = 0; (w < this.props.world && l < this.props.gameData[w].length) 
-                        || (w == this.props.world && l < this.props.level)
-                        || (w == this.props.world && l == this.props.level && type == "tactic"); l++){
+                        || (w == this.props.world && l < this.props.level) ; l++){
         let levelData = this.props.gameData[w][l];
         for(let i = 0; i < levelData.objects.length; i++){
-          if(levelData.objects[i].type == type && levelData.objects[i].side_bar == true)
-            items.push(levelData.objects[i]);
+          if(levelData.objects[i].side_bar == true){
+            if(levelData.objects[i].type == "tactic"){
+              tactics.push(levelData.objects[i]);
+            } else if(levelData.objects[i].type == "example"){
+              examples.push(levelData.objects[i]);
+            } else if(levelData.objects[i].type == "lemma" || levelData.objects[i].type == "theorem"){
+              statements[w].push(levelData.objects[i]);
+            }  
+          }
         }
       }
     }
 
-    if(type == "tactic"){
-      return items.map((s, i) => {
-        return (
-          <div>
-            <LeanColorize key={type+",name,"+i} text={s.name} />
-            <Text key={type+",text,"+i} content={s.content} />
-            <hr/>
-          </div>
-        );
-      });
-    }else if(type == "example"){
-      return items.map((s, i) => {
-        return (
-          <div>
-            <LeanColorize key={type+",statement,"+i} text={s.lean} />
-            <LeanColorize key={type+",proof,"+i} text={"begin\n" + s.proof + "\nend"} />
-            <hr/>
-          </div>
-        );
-      });
-    } else {
-      return items.map((s, i) => {
-        return (
-          <div>
-            <LeanColorize key={type+",name,"+i} text={s.name} />
-            <LeanColorize key={type+",statement,"+i} text={"  " + s.statement} />
-            <hr/>
-          </div>
-        );
-      });
+    let levelData = this.props.gameData[this.props.world][this.props.level];
+    for(let i = 0; i < levelData.objects.length; i++){
+      if(levelData.objects[i].type == "tactic" && levelData.objects[i].side_bar == true){
+        tactics.push(levelData.objects[i]);
+      }
     }
-  }
 
 
-  render(){
-    const itemTypes = ["tactic", "theorem", "lemma", "example"]
-    const itemTypeLabels = ["Tactics", "Theorems", "Lemmas", "Examples"]
+    const sideBarAccordion = (label, list) => {
+      return (
+        <AccordionItem key={label}>
+          <AccordionItemHeading>
+            <AccordionItemButton>{label}</AccordionItemButton>
+          </AccordionItemHeading>
+          <AccordionItemPanel>{list}</AccordionItemPanel>
+        </AccordionItem>
+      );
+    };
 
-    const sideBarContents = itemTypes.map((type, i) => {
-      return <AccordionItem key={type}>
-        <AccordionItemHeading>
-          <AccordionItemButton>{itemTypeLabels[i]}</AccordionItemButton>
-        </AccordionItemHeading>
-        <AccordionItemPanel>
-          {this.getSideBarItems(type)}
-        </AccordionItemPanel>
-      </AccordionItem>
-    });
+    const tacticsAccordion = sideBarAccordion("Tactics", tactics.map((s, i) => {
+      return (
+        <div>
+          <LeanColorize key={"tactic,name,"+i} text={s.name} />
+          <Text key={"tactic,text,"+i} content={s.content} />
+          <hr/>
+        </div>);
+    }));
+
+    const examplesAccordion = sideBarAccordion("Examples", examples.map((s, i) => {
+      return (
+        <div>
+          <LeanColorize key={"example,statement,"+i} text={s.lean} />
+          <LeanColorize key={"example,proof,"+i} text={"begin\n" + s.proof + "\nend"} />
+          <hr/>
+        </div>);
+    }));
+
+    const statementsAccordion = sideBarAccordion("Statements", statements.map((s_w, w) => {
+      return sideBarAccordion("World "+(w+1), s_w.map((s, i) =>{
+        return (
+          <div>
+            <LeanColorize key={s.type+",name,"+i} text={s.name} />
+            <LeanColorize key={s.type+",statement,"+i} text={"  " + s.statement} />
+            <hr/>
+          </div>
+        );
+      }));
+    }));
+
 
     return (
       <div style={{fontSize: "small", overflowY: "auto", height: "100%", overflowX: "hidden"}}>
       <Accordion allowMultipleExpanded={true} allowZeroExpanded={true}>
-        {sideBarContents}
+        {tacticsAccordion}
+        {statementsAccordion}
+        {examplesAccordion}
       </Accordion>
       </div>
     );
@@ -664,6 +688,7 @@ interface GameState {
   activeWorld: number;
   activeLevel: number;
   cursor?: Position;
+  latestProblemId?: string;
 }
 class Game extends React.Component<GameProps, GameState> {
 
@@ -730,16 +755,16 @@ class Game extends React.Component<GameProps, GameState> {
 
     const key = "" + this.state.activeWorld + "," + this.state.activeLevel;
     const content = <Level fileName={this.props.fileName} key={key} levelData={worldData[this.state.activeLevel]} 
-        onDidCursorMove={(c) => {this.setState({cursor: c})}}/>;
+        onDidCursorMove={(c) => {this.setState({cursor: c, latestProblemId: key})}}/>;
 
 
-    // statementIsSolved: () => { 
-    //   if(itemData.status != "solved") {
-    //     itemData.status = "solved";
-    //     this.forceUpdate();
-    //   }},
+    let statementIsSolved = () => {
+      if(this.state.latestProblemId != key) // another level is solved, not this one!
+        return;
+      console.log("SOLVED !");
+    };
         
-    const infoViewDiv = <InfoView file={this.props.fileName} cursor={this.state.cursor} isSolved={() => {}}/>;
+    const infoViewDiv = <InfoView file={this.props.fileName} cursor={this.state.cursor} isSolved={statementIsSolved}/>;
 
     const mainDiv = (
       <Container style={{ height: '100%' }}>
@@ -747,7 +772,7 @@ class Game extends React.Component<GameProps, GameState> {
           {sideBarDiv}
         </Section>
         <Bar size={10} className="Resizer vertical" />
-        <Section minSize={200}>
+        <Section minSize={200} defaultSize={window.innerWidth/2}>
           {content}
         </Section>
         <Bar size={10} className="Resizer vertical" />

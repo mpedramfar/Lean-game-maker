@@ -26,7 +26,7 @@ from lean_game_maker.interactive_loader import interactive_server
 module_path = Path(lean_game_maker.__file__).parent
 interactive_path = module_path.parent / 'interactive_interface'
 
-def render_lean_project(outdir=None, debug=False):
+def render_lean_project(outdir=None):
     try:
         leanpkg_toml = toml.load('leanpkg.toml')
     except FileNotFoundError:
@@ -43,9 +43,6 @@ def render_lean_project(outdir=None, debug=False):
         else:
             paths.append(dep_info['path'])
     lean_path = ':'.join(paths)
-    if debug:
-        print("Lean executable path:", lean_exec_path)
-        print("LEAN_PATH:", lean_path)
 
     
     
@@ -55,8 +52,8 @@ def render_lean_project(outdir=None, debug=False):
 
 
     s = interactive_server(interactive_path=interactive_path, paths=paths,
-                    toolchain=toolchain, source_lib='.', outdir=outdir, debug=debug)
-    if not s.copy_server():
+                    toolchain=toolchain, outdir=outdir)
+    if not s.copy_files():
         return
 
 

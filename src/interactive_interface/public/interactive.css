@@ -364,7 +364,7 @@ html {
 }
 
 .accordion__panel {
-  padding: 20px;
+  padding: 5px;
   animation: fadein 0.35s ease-in;
 }
 
