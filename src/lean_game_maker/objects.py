@@ -136,6 +136,7 @@ class TacticBegin(LineReader):
             return False
         file_reader.status = 'tactic'
         tactic = Tactic()
+        tactic.side_bar = True
         tactic.name = m.group(1).strip()
         file_reader.output.append(tactic)
         def normal_line(file_reader, line):
