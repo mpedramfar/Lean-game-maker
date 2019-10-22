@@ -151,7 +151,7 @@ function GoalWidget({goal, position}: GoalWidgetProps, solved: boolean) {
     && <div className='code-block'
     dangerouslySetInnerHTML={{__html: leanColorize(goal.type) + (!goal.doc && '<br />')}}/>;
 
-  const goalState = (solved && goal.state == "no goals") ? "Problem Complete!" : goal.state;
+  const goalState = (solved && goal.state == "no goals") ? "Proof complete!" : goal.state;
 
   const goalStateHeader = goalState && <div className='info-header'>
     {position.line}:{position.column}: goal</div>;
