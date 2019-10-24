@@ -20,6 +20,8 @@ class FileReader:
         self.blank_line_handler = dismiss_line
         
     def hard_reset(self):
+        self.name = ""
+        self.world_name = ""
         self.reset()
         self.cur_line_nb = 1
         self.output = []
@@ -55,15 +57,18 @@ class FileReader:
                     o.editorText = o.proof if (o.type == "example") else "  sorry"
                     o.lineOffset = o.firstProofLineNumber-1
 
-                    m = regex.compile(r"^[^:\(\{\s]*(.*):=\s*$").match(o.lean)
-                    temp = m.group(1).strip()
-                    if o.type == "example":
-                        o.statement = temp[1:].strip() if temp[0] == ':' else temp
-                    else:
-                        m = regex.compile(r"^([^:\(\{\s]*)(.*)$").match(temp)
-                        o.name = m.group(1)
-                        temp = m.group(2).strip()
-                        o.statement = temp[1:].strip() if temp[0] == ':' else temp
+                    m = regex.compile(r"^[^:\(\{\s]*([\s\S]*):=\s*$", regex.MULTILINE).match(o.lean)
+                    try:
+                        temp = m.group(1).strip()
+                        if o.type == "example":
+                            o.statement = temp[1:].strip() if temp[0] == ':' else temp
+                        else:
+                            m = regex.compile(r"^([^:\(\{\s]*)([\s\S]*)$", regex.MULTILINE).match(temp)
+                            o.name = m.group(1)
+                            temp = m.group(2).strip()
+                            o.statement = temp[1:].strip() if temp[0] == ':' else temp
+                    except:
+                        raise Exception("Failed to parse :\n" + o.lean)
 
 
 class LineReader:

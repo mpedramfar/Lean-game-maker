@@ -19,10 +19,10 @@ class Text:
 @dataclass
 class LeanLines:
     type: str = 'lean'
-    lean: str = ''
+    content: str = ''
 
     def append(self, line):
-        self.lean += line
+        self.content += line
 
 
 @dataclass
@@ -33,6 +33,13 @@ class Tactic:
     def append(self, line):
         self.content += line
 
+@dataclass
+class Axiom:
+    type: str = 'axiom'
+    content: str = ''
+
+    def append(self, line):
+        self.content += line
 
     
 @dataclass
@@ -42,6 +49,7 @@ class Bilingual:
     """
     text: str = ''
     lean: str = ''
+    sideBar: bool = True
 
     def text_append(self, line):
         self.text = self.text + line
@@ -68,9 +76,17 @@ class Example(Bilingual):
 #################
 
 def default_line_handler(file_reader, line):
+    m = regex.compile(r'^\s*--\s*Level name\s*:\s*(.*)', flags=regex.IGNORECASE).match(line)
+    if m:
+        file_reader.name = m.group(1).strip()
+        return
+    m = regex.compile(r'^\s*--\s*World name\s*:\s*(.*)', flags=regex.IGNORECASE).match(line)
+    if m:
+        file_reader.world_name = m.group(1).strip()
+        return    
     l = LeanLines()
     l.append(line)
-    l.hidden = True if regex.compile(r'^[\s\S]*--\s*hide\s*$').match(line) else False
+    l.hidden = True if regex.compile(r'^.*--\s*hide\s*$', flags=regex.IGNORECASE).match(line) else False
     file_reader.output.append(l)
 
 #################
@@ -78,7 +94,7 @@ def default_line_handler(file_reader, line):
 #################
 
 class HiddenBegin(LineReader):
-    regex = regex.compile(r'-- begin hide\s*')
+    regex = regex.compile(r'-- begin hide\s*', flags=regex.IGNORECASE)
 
     def run(self, m, file_reader):
         if file_reader.status is not '':
@@ -93,7 +109,7 @@ class HiddenBegin(LineReader):
         return True
 
 class HiddenEnd(LineReader):
-    regex = regex.compile(r'-- end hide\s*')
+    regex = regex.compile(r'-- end hide\s*', flags=regex.IGNORECASE)
 
     def run(self, m, file_reader):
         if file_reader.status is not 'hidden':
@@ -129,14 +145,14 @@ class TextEnd(LineReader):
         return True
 
 class TacticBegin(LineReader):
-    regex = regex.compile(r'\s*/-\s*Tactic\s*:\s*(.*)$')
+    regex = regex.compile(r'\s*/-\s*Tactic\s*:\s*(.*)$', flags=regex.IGNORECASE)
 
     def run(self, m, file_reader):
         if file_reader.status is not '':
             return False
         file_reader.status = 'tactic'
         tactic = Tactic()
-        tactic.side_bar = True
+        tactic.sideBar = True
         tactic.name = m.group(1).strip()
         file_reader.output.append(tactic)
         def normal_line(file_reader, line):
@@ -155,16 +171,43 @@ class TacticEnd(LineReader):
         file_reader.reset()
         return True
 
+class AxiomBegin(LineReader):
+    regex = regex.compile(r'\s*/-\s*Axiom\s*:\s*(.*)$', flags=regex.IGNORECASE)
+
+    def run(self, m, file_reader):
+        if file_reader.status is not '':
+            return False
+        file_reader.status = 'axiom'
+        axiom = Axiom()
+        axiom.sideBar = True
+        axiom.name = m.group(1).strip()
+        file_reader.output.append(axiom)
+        def normal_line(file_reader, line):
+            axiom.append(line)
+        file_reader.normal_line_handler = normal_line
+        file_reader.blank_line_handler = normal_line
+        return True
+
+
+class AxiomEnd(LineReader):
+    regex = regex.compile(r'-/')
+
+    def run(self, m, file_reader):
+        if file_reader.status is not 'axiom':
+            return False
+        file_reader.reset()
+        return True
+
 
 class LemmaBegin(LineReader):
-    regex = regex.compile(r'\s*/-\s*Lemma\s*:?(.*)$')
+    regex = regex.compile(r'\s*/-\s*Lemma\s*:?(.*)$', flags=regex.IGNORECASE)
 
     def run(self, m, file_reader):
         if file_reader.status is not '':
             return False
         file_reader.status = 'lemma_text'
         lemma = Lemma()
-        lemma.side_bar = not (m.group(1).strip() == 'no-side-bar')
+        lemma.sideBar = not (m.group(1).strip() == 'no-side-bar')
         file_reader.output.append(lemma)
         def normal_line(file_reader, line):
             lemma.text_append(line)
@@ -187,14 +230,14 @@ class LemmaEnd(LineReader):
 
 
 class TheoremBegin(LineReader):
-    regex = regex.compile(r'\s*/-\s*Theorem\s*:?(.*)$')
+    regex = regex.compile(r'\s*/-\s*Theorem\s*:?(.*)$', flags=regex.IGNORECASE)
 
     def run(self, m, file_reader):
         if file_reader.status is not '':
             return False
         file_reader.status = 'theorem_text'
         theorem = Theorem()
-        theorem.side_bar = not (m.group(1).strip() == 'no-side-bar')
+        theorem.sideBar = not (m.group(1).strip() == 'no-side-bar')
         file_reader.output.append(theorem)
         def normal_line(file_reader, line):
             theorem.text_append(line)
@@ -217,14 +260,14 @@ class TheoremEnd(LineReader):
 
 
 class ExampleBegin(LineReader):
-    regex = regex.compile(r'\s*/-\s*Example\s*:?(.*)$')
+    regex = regex.compile(r'\s*/-\s*Example\s*:?(.*)$', flags=regex.IGNORECASE)
 
     def run(self, m, file_reader):
         if file_reader.status is not '':
             return False
         file_reader.status = 'example_text'
         example = Example()
-        example.side_bar = not (m.group(1).strip() == 'no-side-bar')
+        example.sideBar = not (m.group(1).strip() == 'no-side-bar')
         file_reader.output.append(example)
         def normal_line(file_reader, line):
             example.text_append(line)

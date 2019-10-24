@@ -1,24 +1,21 @@
 #!/usr/bin/env python3
 import zipfile, subprocess, json, re
-import glob, distutils
+import glob, distutils.dir_util
 from pathlib import Path
 
 
-
 class interactive_server:
-    def __init__(self, interactive_path, paths, toolchain, outdir):
+    def __init__(self, interactive_path, toolchain, outdir):
         self.interactive_path = interactive_path
-        self.paths = paths
         self.toolchain = toolchain
         self.outdir = outdir
 
 
     def make_library(self):
-        output = str(Path(self.outdir) / 'library.zip')
+        output = str(Path(self.outdir) / 'library.zip')  
         
-        
-        combined_lib = "."
-        combined_lib_path = str(Path(combined_lib).resolve()) + '/src'
+        source_lib = "."
+        source_lib_path = str(Path(source_lib).resolve()) + '/src'
         library_zip_fn = str(Path(output).resolve())
 
         subprocess.call(['leanpkg', 'build'])
@@ -42,7 +39,7 @@ class interactive_server:
         with zipfile.ZipFile(library_zip_fn, mode='w', compression=zipfile.ZIP_DEFLATED, allowZip64=False, compresslevel=9) as zf:
             for p in lean_path:
                 parts = p.parts
-                if str(p.resolve()) == combined_lib_path: # if using combined_lib/src
+                if str(p.resolve()) == source_lib_path: # if using source_lib/src
                     lib_name = parts[-2]
                     lib_info[lib_name] = '/library/' + lib_name
                 elif parts[-1] != 'library':
@@ -117,10 +114,3 @@ class interactive_server:
         self.make_library()
         
         return True
-
-    def get_jss(self):
-        return ['vs/loader.js', 'vs/editor/editor.main.nls.js', 'vs/editor/editor.main.js', 'interactive.js']
-
-    def get_csss(self):
-        return ['interactive.css']
-

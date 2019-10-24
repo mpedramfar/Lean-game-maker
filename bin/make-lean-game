@@ -1,13 +1,8 @@
 #! /usr/bin/env python3
 
 from pathlib import Path
-import sys, shutil, glob, distutils.dir_util
-
-import regex
 from fire import Fire
-import toml
-
-import jsonpickle
+import toml, jsonpickle
 
 
 import lean_game_maker
@@ -16,6 +11,7 @@ from lean_game_maker.objects import (default_line_handler,
     HiddenBegin, HiddenEnd, 
     TextBegin, TextEnd,
     TacticBegin, TacticEnd,
+    AxiomBegin, AxiomEnd,
     ExampleBegin, ExampleEnd,
     LemmaBegin, LemmaEnd,
     TheoremBegin, TheoremEnd,
@@ -31,63 +27,58 @@ def render_lean_project(outdir=None):
         leanpkg_toml = toml.load('leanpkg.toml')
     except FileNotFoundError:
         print("Couldn't find a leanpkg.toml, I give up.")
-        sys.exit(1)
+        return
     toolchain = leanpkg_toml['package']['lean_version']
-    lean_exec_path = Path.home() / '.elan/toolchains' / toolchain / 'bin/lean'
-    paths = [str(lean_exec_path.parent / '../lib/lean/library'),
-             str(Path.cwd() / 'src')]
-
-    for dep, dep_info in leanpkg_toml.get('dependencies', []).items():
-        if 'git' in dep_info:
-            paths.append(str(Path('_target/deps') / dep / 'src'))
-        else:
-            paths.append(dep_info['path'])
-    lean_path = ':'.join(paths)
 
     
-    
-
     outdir = outdir or 'html'
     Path(outdir).mkdir(exist_ok=True)
 
-
-    s = interactive_server(interactive_path=interactive_path, paths=paths,
+    s = interactive_server(interactive_path=interactive_path,
                     toolchain=toolchain, outdir=outdir)
     if not s.copy_files():
         return
 
 
 
-    lecture_reader = FileReader(default_line_handler,
+    file_reader = FileReader(default_line_handler,
             [HiddenBegin, HiddenEnd,
              TextBegin, TextEnd,
              TacticBegin, TacticEnd,
+             AxiomBegin, AxiomEnd,
              ExampleBegin, ExampleEnd,
              LemmaBegin, LemmaEnd,
              TheoremBegin, TheoremEnd,
              ProofBegin, ProofEnd ])
     
     
-    game_data = []
+    game_data = { 'name': leanpkg_toml['package']['name'] , 'worlds' : [] }
     world=0
     while True:
         world += 1
         if not Path(f'src/game/world{world}').exists():
             break
-        world_data = []
+        world_data = { 'levels' : [] }
         level=0
+        print(f"World {world} :")
         while True:
             level += 1
             lean_file = Path(f'src/game/world{world}/level{level}.lean')
             if not lean_file.exists():
                 break
-            print(f"world : {world}, level : {level}")
-            lecture_reader.read_file(str(lean_file))
-            level_data = { 'raw_text' : lecture_reader.raw_text, 'objects' : lecture_reader.output }
-            level_data = jsonpickle.loads(jsonpickle.dumps(level_data, unpicklable=True))
-            world_data.append(level_data)
-            lecture_reader.hard_reset()
-        game_data.append(world_data)
+            print(f"\tlevel {level} ...", end="")
+            file_reader.read_file(str(lean_file))
+            if level == 1:
+                world_data['name'] = file_reader.world_name
+            if len(file_reader.output) > 0:
+                level_data = {'name': file_reader.name, 'objects' : file_reader.output}
+                level_data = jsonpickle.loads(jsonpickle.dumps(level_data, unpicklable=True))
+                world_data['levels'].append(level_data)
+            file_reader.hard_reset()
+            print(f"\r\tlevel {level} ... done")
+
+        if len(world_data['levels']) > 0:
+            game_data['worlds'].append(world_data)
 
     with open(str(Path(outdir) / 'game_data.js'), 'w') as f:
         temp = jsonpickle.encode(game_data, unpicklable=False)

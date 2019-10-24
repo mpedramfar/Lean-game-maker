@@ -8,7 +8,15 @@ See the [installation guide](https://github.com/mpedramfar/Lean-game-maker/blob/
 
 ## Usage
 
-Make a Lean project and add a folder named `game` to the `src` path. For every world, add a folder to `game` and name them `world1`, `world2`, ... . Inside each world, add files `level1.lean`, `level2.lean`, ... for every level in the corresponding world. Inside each Lean file, use the following format for comment and lemmas:
+Make a Lean project and add a folder named `game` to the `src` path. For every world, add a folder to `game` and name them `world1`, `world2`, ... . Inside each world, add files `level1.lean`, `level2.lean`, ... for every level in the corresponding world. 
+Inside each Lean file, use the following format to add a title to each level or world:
+
+```lean
+-- Level name : name_of_the_level
+-- World name : name_of_the_world
+```
+Note that a world's name should be specified in the first level of the world.
+To add comments and lemmas, use this format :
 
 ```lean
 /-
@@ -25,6 +33,7 @@ end
 ```
 You can use Markdown in the comments. It will be compiled with [showdown](http://demo.showdownjs.com/).
 Theorems and examples are similar to lemmas. The only difference is that examples are shown with full solution in the webpage, but lemmas and theorems should be solved by the player.
+Note that only the first lemma or theorem that appears in any level is playable.
 Every theorem, lemma or example will be added to the side bar in the following levels.
 To prevent a lemma from appearing in the side bar, use the following format :
 
@@ -46,6 +55,14 @@ Description of the tactic
 -/
 ```
 This description will be in the side bar from that level onward.
+If you want to add a statement to the list of theorem statements in the side bar without any mention in the main page, use the format :
+
+```lean
+/- Axiom : name_of_the_axiom
+statement_of_the_axiom
+-/
+```
+This will appear in the side bar from that level onward.
 
 If a line in not contained in a comment, lemma, theorem, example or tactic, it will be shown directly in the game. If such a line ends with ` -- hide`, it will not be shown. Alternatively, you can put a few lines inside blocks of the following format.
 ```lean

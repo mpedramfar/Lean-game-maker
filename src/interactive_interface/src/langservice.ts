@@ -47,8 +47,8 @@ export let delayMs = 1000;
 
 export interface editorTextDataInterface {
   lineOffset: number,
-  activeLeanContent: string,
-  activeText?: string,
+  fileContent: string,
+  text: string,
 }
 
 
@@ -79,7 +79,7 @@ class ModelWatcher implements monaco.IDisposable {
       if (!server) {
         return;
       }
-      server.sync(this.model.uri.fsPath, this.editorData.activeLeanContent ).then(() => {
+      server.sync(this.model.uri.fsPath, this.editorData.fileContent ).then(() => {
         if (this.version === version) {
           removeFromRunning(this.model.uri.fsPath);
         }
