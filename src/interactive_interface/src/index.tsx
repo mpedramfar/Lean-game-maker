@@ -271,7 +271,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
 
   render() {
     const goal = this.state.goal &&
-      (<div key={'goal'}>{GoalWidget(this.state.goal, this.state.solved)}</div>);
+      (<div key={Date.now() + 'goal'}>{GoalWidget(this.state.goal, this.state.solved)}</div>);
 
     const goalDiv = (
       <div style={{overflowY: 'auto', width: '100%', height: '100%'}}>
@@ -283,7 +283,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
     );
     
     const msgs = this.state.messages.map((msg, i) =>
-      (<div key={i}>{MessageWidget({msg})}</div>));
+      (<div key={"" + Date.now() + i}>{MessageWidget({msg})}</div>));
 
     const msgsDiv = (
       <div style={{overflowY: 'auto', width: '100%', height: '100%', boxSizing: 'border-box', paddingTop: '1em'}}>
