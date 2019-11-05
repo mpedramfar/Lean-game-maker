@@ -73,6 +73,10 @@ class Example(Bilingual):
     type: str = 'example'
 
 
+@dataclass
+class Definition(Bilingual):
+    type: str = 'definition'
+
 #################
 
 def default_line_handler(file_reader, line):
@@ -83,11 +87,20 @@ def default_line_handler(file_reader, line):
     m = regex.compile(r'^\s*--\s*World name\s*:\s*(.*)', flags=regex.IGNORECASE).match(line)
     if m:
         file_reader.world_name = m.group(1).strip()
-        return    
-    l = LeanLines()
-    l.append(line)
-    l.hidden = True if regex.compile(r'^.*--\s*hide\s*$', flags=regex.IGNORECASE).match(line) else False
-    file_reader.output.append(l)
+        return
+
+    if regex.compile(r'^.*--\s*hide\s*$', flags=regex.IGNORECASE).match(line):
+        l =  LeanLines()
+        l.append(line)
+        l.hidden = True
+        file_reader.output.append(l)
+    elif len(file_reader.output) > 0 and file_reader.output[-1].type == 'lean':
+        file_reader.output[-1].append(line)
+    else:
+        l =  LeanLines()
+        l.append(line)
+        l.hidden = False
+        file_reader.output.append(l)
 
 #################
 #  Line readers #
@@ -259,6 +272,37 @@ class TheoremEnd(LineReader):
         return True
 
 
+class DefinitionBegin(LineReader):
+    regex = regex.compile(r'\s*/-\s*Definition\s*:?(.*)$', flags=regex.IGNORECASE)
+
+    def run(self, m, file_reader):
+        if file_reader.status is not '':
+            return False
+        file_reader.status = 'definition_text'
+        defn = Definition()
+        defn.sideBar = False
+        file_reader.output.append(defn)
+        def normal_line(file_reader, line):
+            defn.text_append(line)
+        file_reader.normal_line_handler = normal_line
+        return True
+
+
+class DefinitionEnd(LineReader):
+    regex = regex.compile(r'-/')
+
+    def run(self, m, file_reader):
+        if file_reader.status is not 'definition_text':
+            return False
+        file_reader.status = 'definition_lean'
+        theorem = file_reader.output[-1]
+        def normal_line(file_reader, line):
+            theorem.lean_append(line)
+        file_reader.normal_line_handler = normal_line
+        return True
+
+
+
 class ExampleBegin(LineReader):
     regex = regex.compile(r'\s*/-\s*Example\s*:?(.*)$', flags=regex.IGNORECASE)
 
@@ -293,7 +337,7 @@ class ProofBegin(LineReader):
     regex = regex.compile(r'^begin\s*') # NOTE : this does not require begin to be on a separate line
 
     def run(self, m, file_reader):
-        if file_reader.status not in ['lemma_lean', 'theorem_lean', 'example_lean']:
+        if file_reader.status not in ['lemma_lean', 'theorem_lean', 'example_lean', 'definition_lean']:
             return False
         file_reader.status = 'proof'
         file_reader.normal_line_handler = dismiss_line # Proofs shouldn't start with normal line

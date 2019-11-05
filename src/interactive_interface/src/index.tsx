@@ -319,7 +319,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
 
 
 // **********************************************************
-interface StatementObject { // theorem, lemma or example
+interface StatementObject { // theorem, lemma, definition or example
   type: string;
   text: string;
   lean: string;
@@ -337,6 +337,7 @@ interface StatementObject { // theorem, lemma or example
 interface NonStatementObject { // comment, tactic, axiom or lean
   type: boolean;
   content: string;
+  name?: string;
   sideBar?: boolean;
   hidden?: boolean;
 }
@@ -350,6 +351,7 @@ interface LevelData {
 interface WorldData {
   name: string;
   levels: Array<LevelData>;
+  parents?: Array<number>;
   lastVisitedLevel?: number;
 }
 
@@ -511,7 +513,8 @@ class Statement extends React.Component<StatementProps, {}> {
     }
 
     const title = (this.props.type == "lemma") ? "Lemma" :
-        ((this.props.type == "theorem") ? "Theorem" : "Example");
+        ((this.props.type == "theorem") ? "Theorem" :
+        ((this.props.type == "definition") ? "Definition" : "Example"));
 
     return <div className="lemma_wrapper">
         <span className="lemma_label" >{title}</span>
@@ -523,9 +526,11 @@ class Statement extends React.Component<StatementProps, {}> {
 	          <LeanColorize text={this.props.lean} />
     	    </div>
         </div>
+        {(this.props.type == "definition") ? null :
         <div style={{ marginTop:"0.5em" }}>
           <span style={{ fontStyle:"italic" }}>Proof :</span>
         </div>
+        }
         <div className="lemma_proof" >
           <LeanColorize text="begin"/>
           {proof}
@@ -553,7 +558,9 @@ class Level extends React.Component<LevelProps, LevelState> {
 
     let i = 0;
     for(; i < this.props.levelData.objects.length; i++){
-      if(this.props.levelData.objects[i].type == "lemma" || this.props.levelData.objects[i].type == "theorem")
+      if(this.props.levelData.objects[i].type == "lemma" || 
+          this.props.levelData.objects[i].type == "theorem" ||
+          this.props.levelData.objects[i].type == "definition")
         break;
     }
 
@@ -576,7 +583,7 @@ class Level extends React.Component<LevelProps, LevelState> {
       {
         return <LeanColorize key={i} text={(itemData as any).content}/>
       }
-      else if( itemData.type == "lemma" || itemData.type == "theorem" || itemData.type == "example")
+      else if( itemData.type == "lemma" || itemData.type == "theorem" || itemData.type == "definition" || itemData.type == "example")
       {
         return <Statement key={i}
                       fileName={this.props.fileName}
@@ -606,47 +613,121 @@ interface SideBarProps {
 interface SideBarState {
 }
 class SideBar extends React.Component<SideBarProps, SideBarState> {
+  sideBarData : ({ 
+            'tactics' : NonStatementObject[], 
+            'sortedStatements' : (StatementObject|NonStatementObject)[][], // first dimension is the world number
+            'examples' : StatementObject[] 
+          })[][];
 
   constructor(props: SideBarProps) {
     super(props);
+
+
+    let getSidebarContentsInLevel = (w: number, l: number) => { // Stuff within this level that should be put in the side bar
+      let levelObjects = this.props.worlds[w].levels[l].objects;
+      let tactics = [], nonAxiomStatements = [], examples = [], axioms = [];
+
+      for(let i = 0; i < levelObjects.length; i++){
+        if(levelObjects[i].sideBar == true){
+          if(levelObjects[i].type == "tactic"){
+            tactics.push(levelObjects[i]);
+          } else if(levelObjects[i].type == "example"){
+            examples.push(levelObjects[i]);
+          } else if(levelObjects[i].type == "lemma" 
+                      || levelObjects[i].type == "theorem"){
+            nonAxiomStatements.push(levelObjects[i]);
+          } else if(levelObjects[i].type == "axiom"){
+            axioms.push(levelObjects[i]);
+          }
+        }
+      }
+      return {
+          'tactics' : tactics,
+          'nonAxiomStatements' : nonAxiomStatements,
+          'examples' :  examples,
+          'axioms' : axioms
+      };
+    }
+
+    let getSidebarContentsInWorld = (w: number) => { // Stuff within this world that should be put in the side bar
+      let output = {
+        'tactics' : [],
+        'statements' : [],
+        'examples' :  [],
+      };
+
+      for(let l = 0; l < this.props.worlds[w].levels.length; l++){
+        let curLevelData = getSidebarContentsInLevel(w, l);
+        output.tactics.push(...curLevelData.tactics);
+        output.examples.push(...curLevelData.examples);
+        output.statements.push(...curLevelData.axioms);
+        output.statements.push(...curLevelData.nonAxiomStatements);
+      }
+      return output;
+    }
+
+    let isParentOf = (w1: number, w2: number) => { // Is w1 a parent (direct or indirect) of w2 ?
+      let world2 = this.props.worlds[w2];
+      if(!world2.parents) return false;
+      for(let i = 0; i < world2.parents.length; i++){
+        if(w1 == world2.parents[i] || isParentOf(w1, world2.parents[i]))
+          return true;
+      }
+      return false;
+    }
+
+
+    this.sideBarData = new Array(this.props.worlds.length).fill([]);
+    for(let w = 0; w < this.props.worlds.length; w++){
+      let worldData = this.props.worlds[w];
+      this.sideBarData[w] = new Array(worldData.levels.length).fill([]);
+
+      // Level 0 :
+      let tactics = [], sortedStatements = new Array(this.props.worlds.length).fill([]), examples = [];
+      for(let w1 = 0; w1 < this.props.worlds.length; w1++){
+        if(isParentOf(w1, w)){
+          let worldSidebarData = getSidebarContentsInWorld(w1);
+          tactics.push(...worldSidebarData.tactics);
+          examples.push(...worldSidebarData.examples);
+          sortedStatements[w1] = worldSidebarData.statements;
+        }
+      }
+
+      let curLevelData = getSidebarContentsInLevel(w, 0);
+      tactics.push(...curLevelData.tactics);
+      sortedStatements[w] = curLevelData.axioms;
+      this.sideBarData[w][0] = {
+        'tactics' : tactics,
+        'sortedStatements' : sortedStatements,
+        'examples' : examples,
+      };
+
+      // The rest of the levels :
+      for(let l = 1; l < worldData.levels.length; l++){
+        let prevLevelData = getSidebarContentsInLevel(w, l-1);
+        let curLevelData = getSidebarContentsInLevel(w, l);
+
+        let sortedStatements = new Array(this.props.worlds.length).fill([]);
+        for(let w1 = 0; w1 < this.props.worlds.length; w1++){
+          if(w1 != w){
+            sortedStatements[w1] = this.sideBarData[w][l-1].sortedStatements[w1];
+          }else{
+            sortedStatements[w] = this.sideBarData[w][l-1].sortedStatements[w].concat(prevLevelData.nonAxiomStatements, curLevelData.axioms);
+          }
+        }
+
+        this.sideBarData[w][l] = {
+            'tactics' : this.sideBarData[w][l-1].tactics.concat(curLevelData.tactics),
+            'sortedStatements' : sortedStatements,
+            'examples' :  this.sideBarData[w][l-1].examples.concat(prevLevelData.examples),
+        };
+      }
+    }
+    
   }
 
 
   render(){
-
-    let tactics = [], statements = [], examples = [];
-    for(let w = 0; w <= this.props.world; w++){
-      statements.push([]);   // "statements" is a 2D array, first dimension is the world
-      for(let l = 0; (w < this.props.world && l < this.props.worlds[w].levels.length) 
-                        || (w == this.props.world && l < this.props.level) ; l++){
-        let levelData = this.props.worlds[w].levels[l];
-        for(let i = 0; i < levelData.objects.length; i++){
-          if(levelData.objects[i].sideBar == true){
-            if(levelData.objects[i].type == "tactic"){
-              tactics.push(levelData.objects[i]);
-            } else if(levelData.objects[i].type == "example"){
-              examples.push(levelData.objects[i]);
-            } else if(levelData.objects[i].type == "lemma" 
-                        || levelData.objects[i].type == "theorem"
-                        || levelData.objects[i].type == "axiom"){
-              statements[w].push(levelData.objects[i]);
-            }  
-          }
-        }
-      }
-    }
-
-    let levelData = this.props.worlds[this.props.world].levels[this.props.level];
-    for(let i = 0; i < levelData.objects.length; i++){
-      if(levelData.objects[i].sideBar == true){
-        if(levelData.objects[i].type == "tactic"){
-          tactics.push(levelData.objects[i]);
-        } else if(levelData.objects[i].type == "axiom"){
-          statements[this.props.world].push(levelData.objects[i]);
-        }  
-      }
-    }
-
 
     const sideBarAccordion = (label, list) => {
       if(list.length == 0)
@@ -666,16 +747,21 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
       );
     };
 
-    const tacticsAccordion = sideBarAccordion("Tactics", tactics.map((s, i) => {
+    let data = this.sideBarData[this.props.world][this.props.level];
+
+    const tacticsAccordion = sideBarAccordion("Tactics", data.tactics.map((s, i) => {
+      return sideBarAccordion(s.name, [<Text key={"tactic,text,"+i} content={s.content} />]);
+      /*
       return (
         <div>
           <LeanColorize key={"tactic,name,"+i} text={s.name} />
           <Text key={"tactic,text,"+i} content={s.content} />
           <hr/>
         </div>);
+      //*/
     }));
 
-    const examplesAccordion = sideBarAccordion("Examples", examples.map((s, i) => {
+    const examplesAccordion = sideBarAccordion("Examples", data.examples.map((s, i) => {
       return (
         <div>
           <LeanColorize key={"example,statement,"+i} text={s.lean} />
@@ -684,12 +770,11 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
         </div>);
     }));
 
-    const statementsAccordion = sideBarAccordion("Theorem statements", statements.map((s_w, w) => {
-      let label = "World "+(w+1);
-      if(this.props.worlds[w].name)
-        label += " -- " + this.props.worlds[w].name
-      return sideBarAccordion(label, s_w.map((s, i) =>{
-        let e = "  " + ((s.type == "axiom") ? s.content : s.statement);
+    const statementsAccordion = sideBarAccordion("Theorem statements", data.sortedStatements.map((statements, w) => {
+      if(!statements) return [];
+      let label = this.props.worlds[w].name;
+      return sideBarAccordion(label, statements.map((s, i) =>{
+        let e = "  " + ((s.type == "axiom") ? (s as any).content : (s as any).statement);
         return (
           <div>
             <LeanColorize key={s.type+",name,"+i} text={s.name} />

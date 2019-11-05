@@ -105,12 +105,13 @@ class interactive_server:
         return True
 
 
-    def copy_files(self):
+    def copy_files(self, make_lib=True):
         if not self.server_exists():
             return False
         
         distutils.dir_util.copy_tree(self.interactive_path / 'dist', str(Path(self.outdir)))
         distutils.dir_util.copy_tree(self.interactive_path / 'lean_server' / self.toolchain, str(Path(self.outdir)))
-        self.make_library()
+        if make_lib:
+            self.make_library()
         
         return True

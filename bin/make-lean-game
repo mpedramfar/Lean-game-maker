@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from fire import Fire
-import toml, jsonpickle
+import toml, jsonpickle, distutils.dir_util
 
 
 import lean_game_maker
@@ -15,6 +15,7 @@ from lean_game_maker.objects import (default_line_handler,
     ExampleBegin, ExampleEnd,
     LemmaBegin, LemmaEnd,
     TheoremBegin, TheoremEnd,
+    DefinitionBegin, DefinitionEnd,
     ProofBegin, ProofEnd)
 
 from lean_game_maker.interactive_loader import interactive_server
@@ -22,7 +23,7 @@ from lean_game_maker.interactive_loader import interactive_server
 module_path = Path(lean_game_maker.__file__).parent
 interactive_path = module_path.parent / 'interactive_interface'
 
-def render_lean_project(outdir=None):
+def render_lean_project(outdir=None, nolib=False):
     try:
         leanpkg_toml = toml.load('leanpkg.toml')
     except FileNotFoundError:
@@ -36,7 +37,7 @@ def render_lean_project(outdir=None):
 
     s = interactive_server(interactive_path=interactive_path,
                     toolchain=toolchain, outdir=outdir)
-    if not s.copy_files():
+    if not s.copy_files(make_lib = not nolib):
         return
 
 
@@ -49,36 +50,42 @@ def render_lean_project(outdir=None):
              ExampleBegin, ExampleEnd,
              LemmaBegin, LemmaEnd,
              TheoremBegin, TheoremEnd,
+             DefinitionBegin, DefinitionEnd,
              ProofBegin, ProofEnd ])
     
     
-    game_data = { 'name': leanpkg_toml['package']['name'] , 'worlds' : [] }
-    world=0
-    while True:
-        world += 1
-        if not Path(f'src/game/world{world}').exists():
-            break
-        world_data = { 'levels' : [] }
-        level=0
-        print(f"World {world} :")
-        while True:
-            level += 1
-            lean_file = Path(f'src/game/world{world}/level{level}.lean')
+    game_config = toml.load('game_config.toml')
+    ### TODO: check for errors
+
+    if 'extra_files' in game_config:
+        distutils.dir_util.copy_tree(str(Path('.')/game_config['extra_files']), str(Path(outdir)/game_config['extra_files']))
+
+
+    game_data = { 'name': game_config['name'] if 'name' in game_config else "Lean game", 'worlds' : [] }
+
+    for w, world_config in enumerate(game_config['worlds']):
+        world_data = { 'name': world_config['name'] , 'levels' : [] }
+        if 'parents' in world_config:
+            world_data['parents'] = [i - 1 for i in world_config['parents']]
+
+        print(f"{world_data['name']} :")
+        for i, level_address in enumerate(world_config['levels']):
+            lean_file = Path(level_address)
             if not lean_file.exists():
-                break
-            print(f"\tlevel {level} ...", end="")
+                print(f'The file "{level_address}" does not exist.')
+                return
+            print(f"\tlevel {i+1} ...", end="")
             file_reader.read_file(str(lean_file))
-            if level == 1:
-                world_data['name'] = file_reader.world_name
             if len(file_reader.output) > 0:
                 level_data = {'name': file_reader.name, 'objects' : file_reader.output}
                 level_data = jsonpickle.loads(jsonpickle.dumps(level_data, unpicklable=True))
                 world_data['levels'].append(level_data)
             file_reader.hard_reset()
-            print(f"\r\tlevel {level} ... done")
+            print(f"\r\tlevel {i+1} ... done")
 
         if len(world_data['levels']) > 0:
             game_data['worlds'].append(world_data)
+
 
     with open(str(Path(outdir) / 'game_data.js'), 'w') as f:
         temp = jsonpickle.encode(game_data, unpicklable=False)
