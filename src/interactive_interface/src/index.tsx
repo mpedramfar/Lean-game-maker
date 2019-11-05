@@ -15,6 +15,8 @@ import {
   AccordionItemPanel,
 } from 'react-accessible-accordion';
 
+import ForceGraph2D from 'react-force-graph-2d';
+
 const MathJax = require("MathJax");
 
 const showdown = require("showdown");
@@ -358,6 +360,7 @@ interface WorldData {
 interface GameData {
   name: string;
   worlds: Array<WorldData>;
+  introData: LevelData;
 }
 // **********************************************************
 
@@ -678,6 +681,7 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
 
 
     this.sideBarData = new Array(this.props.worlds.length).fill([]);
+    let worldSidebarData = this.props.worlds.map((w, i) => getSidebarContentsInWorld(i));
     for(let w = 0; w < this.props.worlds.length; w++){
       let worldData = this.props.worlds[w];
       this.sideBarData[w] = new Array(worldData.levels.length).fill([]);
@@ -686,14 +690,13 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
       let tactics = [], sortedStatements = new Array(this.props.worlds.length).fill([]), examples = [];
       for(let w1 = 0; w1 < this.props.worlds.length; w1++){
         if(isParentOf(w1, w)){
-          let worldSidebarData = getSidebarContentsInWorld(w1);
-          tactics.push(...worldSidebarData.tactics);
-          examples.push(...worldSidebarData.examples);
-          sortedStatements[w1] = worldSidebarData.statements;
+          tactics.push(...worldSidebarData[w1].tactics);
+          examples.push(...worldSidebarData[w1].examples);
+          sortedStatements[w1] = worldSidebarData[w1].statements;
         }
       }
 
-      let curLevelData = getSidebarContentsInLevel(w, 0);
+      let curLevelData = getSidebarContentsInLevel(w, 0), prevLevelData;
       tactics.push(...curLevelData.tactics);
       sortedStatements[w] = curLevelData.axioms;
       this.sideBarData[w][0] = {
@@ -704,8 +707,8 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
 
       // The rest of the levels :
       for(let l = 1; l < worldData.levels.length; l++){
-        let prevLevelData = getSidebarContentsInLevel(w, l-1);
-        let curLevelData = getSidebarContentsInLevel(w, l);
+        prevLevelData = curLevelData;
+        curLevelData = getSidebarContentsInLevel(w, l);
 
         let sortedStatements = new Array(this.props.worlds.length).fill([]);
         for(let w1 = 0; w1 < this.props.worlds.length; w1++){
@@ -747,18 +750,16 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
       );
     };
 
-    let data = this.sideBarData[this.props.world][this.props.level];
+    let data = {
+      'tactics' : [],
+      'sortedStatements' : [],
+      'examples' : []
+    };
+    data = this.sideBarData[this.props.world][this.props.level];
+
 
     const tacticsAccordion = sideBarAccordion("Tactics", data.tactics.map((s, i) => {
       return sideBarAccordion(s.name, [<Text key={"tactic,text,"+i} content={s.content} />]);
-      /*
-      return (
-        <div>
-          <LeanColorize key={"tactic,name,"+i} text={s.name} />
-          <Text key={"tactic,text,"+i} content={s.content} />
-          <hr/>
-        </div>);
-      //*/
     }));
 
     const examplesAccordion = sideBarAccordion("Examples", data.examples.map((s, i) => {
@@ -803,6 +804,7 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
 interface GameProps {
   fileName: string;
   worlds: Array<WorldData>;
+  introData: LevelData;
   name: string;
 }
 interface GameState {
@@ -810,6 +812,7 @@ interface GameState {
   level: number;
   cursor?: Position;
   latestProblemId?: string;
+  introPage: boolean;
 }
 class Game extends React.Component<GameProps, GameState> {
 
@@ -818,6 +821,7 @@ class Game extends React.Component<GameProps, GameState> {
     this.state = {
       world: 0,
       level: 0,
+      introPage: true
     };
   }
 
@@ -829,7 +833,7 @@ class Game extends React.Component<GameProps, GameState> {
       (statementData as any).editorText = activeEditorData.text;
     }
     
-    this.setState({ world: world, level: level });
+    this.setState({ world: world, level: level, introPage: false });
     this.props.worlds[world].lastVisitedLevel = level;
 
   }
@@ -845,26 +849,97 @@ class Game extends React.Component<GameProps, GameState> {
   }
 
   render() {
-    const worldData = this.props.worlds[this.state.world];
 
+    if(this.state.introPage){
+      let graphData = {
+        'nodes' : this.props.worlds.map((w, i) => ({"id" : i})), 
+        'links' : [].concat(... this.props.worlds.map((w, i) =>{
+          if(!w.parents) return [];
+          return w.parents.map((p)=>({'source' : p, 'target' : i}));
+        }))
+      };
+
+      const TheGraph = (props) => {
+        let NODE_R = 10;
+        const [highlightNodes, setHighlightNodes] = React.useState([]);
+        const handleNodeHover = React.useCallback(node => {
+          setHighlightNodes(node ? [node] : []);
+        }, [setHighlightNodes]);
+        const paintRing = React.useCallback((node, ctx) => {
+          // add ring just for highlighted nodes
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, NODE_R * 1.4, 0, 2 * Math.PI, false);
+          ctx.fillStyle = 'red';
+          ctx.fill();
+        }, []);
+        return <ForceGraph2D
+          width={props.width}
+          height={props.height}
+          graphData={graphData}
+          nodeRelSize={NODE_R}
+          linkWidth={5}
+          linkDirectionalParticles={5}
+          linkDirectionalArrowLength={4}
+          linkDirectionalParticleWidth={4}
+          nodeCanvasObjectMode={node => highlightNodes.indexOf(node) !== -1 ? 'before' : undefined}
+          nodeCanvasObject={paintRing}
+          onNodeHover={handleNodeHover}
+          onNodeClick={(node) => {this.gotoWorld(node.id)}}
+          nodeLabel={(node) => {
+            return markdownConverter.makeHtml(this.props.worlds[node.id].name);
+          }}
+          dagMode="td"
+          dagLevelDistance={30}
+        />;
+      };
+
+      const content = <Level fileName={this.props.fileName} key={"intto"} levelData={this.props.introData} 
+      onDidCursorMove={(c) => {}}/>;
+
+      return (
+        <div>
+          <Container style={{ height: '100%' }}>
+          <Section size={window.innerWidth*0.6}>
+            {content}
+          </Section>
+          <Section size={window.innerWidth*0.4}>
+            <TheGraph width={window.innerWidth*0.5} height={window.innerHeight}/>
+          </Section>
+        </Container>
+        </div>
+      );
+    }
+
+    const worldData = this.props.worlds[this.state.world];
     const key = "" + this.state.world + "," + this.state.level;
 
+    let worldLabel = worldData.name;
+    let worldButtonsPanel = (
+      <div key={this.state.world} style={{ width: '100%', height: '2em', top: '0em', position: 'fixed' }}>
+        <button disabled={ this.state.world == 0 } 
+          style={{ 
+            float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
+          }} onClick={() => { this.gotoWorld.call(this, this.state.world - 1); }}> Previous World </button>
+        <button disabled={ this.state.world == this.props.worlds.length - 1 } 
+          style={{
+            float: 'right', borderStyle: 'ridge', width: '20%', height: '100%'
+          }} onClick={() => { this.gotoWorld.call(this, this.state.world + 1); }}> Next World </button>
+        <div style={{ textAlign: 'center' }}><h3><Text content={worldLabel}/></h3></div>
+      </div>
+    );
 
-    let worldLabel = "World " + (this.state.world + 1);
-    if(worldData.name){
-      worldLabel += " -- " + worldData.name
-    }
-    const worldButtonsPanel = <div key={this.state.world} style={{ width: '100%', height: '2em', top: '0em', position: 'fixed' }}>
-      <button disabled={ this.state.world == 0 } 
-        style={{ 
-          float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
-        }} onClick={() => { this.gotoWorld.call(this, this.state.world - 1); }}> Previous World </button>
-      <button disabled={ this.state.world == this.props.worlds.length - 1 } 
-        style={{
-          float: 'right', borderStyle: 'ridge', width: '20%', height: '100%'
-        }} onClick={() => { this.gotoWorld.call(this, this.state.world + 1); }}> Next World </button>
-      <div style={{ textAlign: 'center' }}><h3><Text content={worldLabel}/></h3></div>
-    </div>;
+    worldButtonsPanel = (
+      <div>
+        <div key={this.state.world} style={{ width: '100%', height: '2em', top: '0em', position: 'fixed' }}>
+          <button
+            style={{ 
+              float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
+            }} onClick={() => { this.setState({introPage : true}) }}> Main Menu </button>
+        </div>
+        <div style={{ textAlign: 'center' }}><h3><Text content={worldLabel}/></h3></div>
+      </div>
+    );
+
 
     let levelLabel = "Level " + (this.state.level + 1);
     if(worldData.levels[this.state.level].name){
@@ -960,7 +1035,7 @@ window.indexedDB.deleteDatabase("leanlibrary").onsuccess = function(event) {
     const fn = monaco.Uri.file('test.lean').fsPath;
 
     render(
-        <Game fileName={fn} worlds={gameData.worlds} name={gameData.name}/>,
+        <Game fileName={fn} worlds={gameData.worlds} name={gameData.name} introData={gameData.introData}/>,
         document.getElementById('root'),
     );
   

@@ -57,11 +57,21 @@ def render_lean_project(outdir=None, nolib=False):
     game_config = toml.load('game_config.toml')
     ### TODO: check for errors
 
-    if 'extra_files' in game_config:
+    if 'extra_files' in game_config and Path(game_config['extra_files']).is_dir():
         distutils.dir_util.copy_tree(str(Path('.')/game_config['extra_files']), str(Path(outdir)/game_config['extra_files']))
 
 
     game_data = { 'name': game_config['name'] if 'name' in game_config else "Lean game", 'worlds' : [] }
+
+    print(f"Intro page ...", end="")
+    intro_file = game_config['intro']
+    if not Path(intro_file).exists():
+        print(f'The file "{intro_file}" does not exist.')
+        return
+    file_reader.read_file(intro_file)
+    game_data['introData'] = jsonpickle.loads(jsonpickle.dumps({'objects' : file_reader.output}, unpicklable=True))
+    file_reader.hard_reset()
+    print(f"\rIntro page ... done")
 
     for w, world_config in enumerate(game_config['worlds']):
         world_data = { 'name': world_config['name'] , 'levels' : [] }
@@ -70,12 +80,11 @@ def render_lean_project(outdir=None, nolib=False):
 
         print(f"{world_data['name']} :")
         for i, level_address in enumerate(world_config['levels']):
-            lean_file = Path(level_address)
-            if not lean_file.exists():
+            if not Path(level_address).exists():
                 print(f'The file "{level_address}" does not exist.')
                 return
             print(f"\tlevel {i+1} ...", end="")
-            file_reader.read_file(str(lean_file))
+            file_reader.read_file(level_address)
             if len(file_reader.output) > 0:
                 level_data = {'name': file_reader.name, 'objects' : file_reader.output}
                 level_data = jsonpickle.loads(jsonpickle.dumps(level_data, unpicklable=True))
