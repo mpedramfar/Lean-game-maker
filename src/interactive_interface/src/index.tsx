@@ -16,6 +16,7 @@ import {
 } from 'react-accessible-accordion';
 
 import ForceGraph2D from 'react-force-graph-2d';
+import * as d3 from "d3";
 
 const MathJax = require("MathJax");
 
@@ -852,7 +853,7 @@ class Game extends React.Component<GameProps, GameState> {
 
     if(this.state.introPage){
       let graphData = {
-        'nodes' : this.props.worlds.map((w, i) => ({"id" : i})), 
+        'nodes' : this.props.worlds.map((w, i) => ({"id" : i, x : 0, y : 0, worldData : w})), 
         'links' : [].concat(... this.props.worlds.map((w, i) =>{
           if(!w.parents) return [];
           return w.parents.map((p)=>({'source' : p, 'target' : i}));
@@ -872,15 +873,24 @@ class Game extends React.Component<GameProps, GameState> {
           ctx.fillStyle = 'red';
           ctx.fill();
         }, []);
+
+        const graphRef = React.useRef(null);
+        React.useEffect(()=>{
+          const fg = graphRef.current;
+          fg.d3Force('collide', d3.forceCollide(4));
+          fg.d3Force("link", d3.forceLink().id(function (d) { return d.id; }).distance(80).strength(1))
+          fg.d3Force("charge", d3.forceManyBody().strength(-15))
+        });
+
         return <ForceGraph2D
+          ref={graphRef}
           width={props.width}
           height={props.height}
           graphData={graphData}
           nodeRelSize={NODE_R}
           linkWidth={5}
-          linkDirectionalParticles={5}
-          linkDirectionalArrowLength={4}
-          linkDirectionalParticleWidth={4}
+          linkDirectionalParticles={0}
+          linkDirectionalArrowLength={10}
           nodeCanvasObjectMode={node => highlightNodes.indexOf(node) !== -1 ? 'before' : undefined}
           nodeCanvasObject={paintRing}
           onNodeHover={handleNodeHover}
@@ -888,8 +898,10 @@ class Game extends React.Component<GameProps, GameState> {
           nodeLabel={(node) => {
             return markdownConverter.makeHtml(this.props.worlds[node.id].name);
           }}
+          enableNodeDrag={false}
+          enableZoomPanInteraction={false}
           dagMode="td"
-          dagLevelDistance={30}
+          dagLevelDistance={50}
         />;
       };
 
@@ -899,11 +911,11 @@ class Game extends React.Component<GameProps, GameState> {
       return (
         <div>
           <Container style={{ height: '100%' }}>
-          <Section size={window.innerWidth*0.6}>
+          <Section defaultSize={window.innerWidth*0.6}>
             {content}
           </Section>
-          <Section size={window.innerWidth*0.4}>
-            <TheGraph width={window.innerWidth*0.5} height={window.innerHeight}/>
+          <Section defaultSize={window.innerWidth*0.4}>
+            <TheGraph width={window.innerWidth*0.4} height={window.innerHeight}/>
           </Section>
         </Container>
         </div>
