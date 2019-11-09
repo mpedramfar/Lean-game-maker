@@ -877,9 +877,9 @@ class Game extends React.Component<GameProps, GameState> {
         const graphRef = React.useRef(null);
         React.useEffect(()=>{
           const fg = graphRef.current;
-          fg.d3Force('collide', d3.forceCollide(4));
-          fg.d3Force("link", d3.forceLink().id(function (d) { return d.id; }).distance(80).strength(1))
-          fg.d3Force("charge", d3.forceManyBody().strength(-15))
+          fg.d3Force('collide', d3.forceCollide(20));
+          fg.d3Force("link", d3.forceLink().id(function (d) { return d.id; }).distance(50).strength(1))
+          fg.d3Force("charge", d3.forceManyBody().strength(-40))
         });
 
         return <ForceGraph2D
@@ -901,7 +901,7 @@ class Game extends React.Component<GameProps, GameState> {
           enableNodeDrag={false}
           enableZoomPanInteraction={false}
           dagMode="td"
-          dagLevelDistance={50}
+          dagLevelDistance={60}
         />;
       };
 
