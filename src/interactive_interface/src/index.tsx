@@ -18,6 +18,8 @@ import {
 import ForceGraph2D from 'react-force-graph-2d';
 import * as d3 from "d3";
 
+const seedrandom = require("seedrandom");
+
 const MathJax = require("MathJax");
 
 const showdown = require("showdown");
@@ -814,24 +816,102 @@ interface GameState {
   cursor?: Position;
   latestProblemId?: string;
   introPage: boolean;
+  solvedLevels: Array<string>;
+  solvedWorlds: Array<number>;
 }
 class Game extends React.Component<GameProps, GameState> {
+  graphData : any;
 
   constructor(props: GameProps) {
     super(props);
     this.state = {
-      world: 0,
+      world: -1,
       level: 0,
-      introPage: true
+      introPage: true,
+      solvedLevels: [],
+      solvedWorlds: []
     };
+
+    if(!this.graphData){
+
+      let worlds = this.props.worlds;
+      let x = new Array(worlds.length).fill(0);
+      let y = new Array(worlds.length).fill(0);
+      let worldsWithY = [];
+      for(let i = 0; i < worlds.length; i++){
+        let p = worlds[i].parents;
+        if(p){
+          for(let j = 0; j < p.length; j++){
+            y[i] = y[i] > y[p[j]] + 1 ? y[i] : y[p[j]] + 1;
+          }
+        }
+        if(worldsWithY.length <= y[i]){
+          worldsWithY.push([]);
+        }
+        x[i] = worldsWithY[y[i]].length;
+        worldsWithY[y[i]].push(i);
+      }
+
+      let find_perm = (a : Array<number>, cost : (a_k:number, k:number) => number ) => { 
+        // return the permutation where the cost is minumum
+        // cost of [a_0, a_1, a_2, ..., a_{n-1}] = cost(a_0, 0) + cost(a_1, 1) + ... + cost(a_{n-1}, n-1)
+        let swap = (a : Array<number>, i : number, j : number) => {
+          let t = a[i]; a[i] = a[j]; a[j] = t;
+        }
+        let permute = (a : Array<number>, n : number) => { // only look at a[0], a[1], ..., a[n-1]
+          if(n == 1){
+            return [ [a[0]] , cost(a[0], 0)];
+          }
+          let output = [null, null]; // = [output_array, output_cost]
+          for (let i = 0; i < n; i++) {
+            swap(a, i, n-1);
+            let temp = permute(a, n-1);
+            temp[1] += cost(a[n-1], n-1);
+            if(!output[1] || output[1] > temp[1]){
+              output = [ temp[0].push(a[n-1]), temp[1] ];
+            }
+            swap(a, i, n-1);
+          }
+          return output;
+        }
+        return permute(a, a.length)[0];
+      }
+
+      for(let i = 0; i < worlds.length + 1; i++){
+        if(!worldsWithY[i]) break;
+        let cost = (w, j) => { // keep the x value of worlds[w] close to its parents
+          if(!worlds[w].parents) return 0;
+          let c = 0;
+          for(let p = 0; p < worlds[w].parents.length; p++){
+            c += Math.abs(j - x[worlds[w].parents[p]]);
+          }
+          return c;
+        }
+        let temp = find_perm(worldsWithY[i], cost);
+        for(let j = 0; j < temp.length; j++){
+          x[temp[j]] = j;
+        }
+      }
+
+      this.graphData = {
+        'nodes' : this.props.worlds.map((w, i) => ({"id" : i, x : x[i]*40, y : y[i]*40, worldData : w})),
+        'links' : [].concat(... this.props.worlds.map((w, i) =>{
+          if(!w.parents) return [];
+          return w.parents.map((p)=>({'source' : p, 'target' : i}));
+        }))
+      };
+    }
+
   }
 
   goto(world: number, level: number){
-    let levelData = this.props.worlds[this.state.world].levels[this.state.level]
-    let statementData = levelData.objects[levelData.activeIndex];
-
-    if(statementData){
-      (statementData as any).editorText = activeEditorData.text;
+    if(this.state.world != -1){
+      let levelData = this.props.worlds[this.state.world].levels[this.state.level]
+      let statementData = levelData.objects[levelData.activeIndex];
+  
+      if(statementData){
+        (statementData as any).editorText = activeEditorData.text;
+      }  
     }
     
     this.setState({ world: world, level: level, introPage: false });
@@ -852,13 +932,6 @@ class Game extends React.Component<GameProps, GameState> {
   render() {
 
     if(this.state.introPage){
-      let graphData = {
-        'nodes' : this.props.worlds.map((w, i) => ({"id" : i, x : 0, y : 0, worldData : w})), 
-        'links' : [].concat(... this.props.worlds.map((w, i) =>{
-          if(!w.parents) return [];
-          return w.parents.map((p)=>({'source' : p, 'target' : i}));
-        }))
-      };
 
       const TheGraph = (props) => {
         let NODE_R = 10;
@@ -866,33 +939,74 @@ class Game extends React.Component<GameProps, GameState> {
         const handleNodeHover = React.useCallback(node => {
           setHighlightNodes(node ? [node] : []);
         }, [setHighlightNodes]);
-        const paintRing = React.useCallback((node, ctx) => {
-          // add ring just for highlighted nodes
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, NODE_R * 1.4, 0, 2 * Math.PI, false);
-          ctx.fillStyle = 'red';
-          ctx.fill();
-        }, []);
+
+        const paintNode = (node, ctx, globalScale, solveWorlds, highlightNodes) => {
+
+          if(highlightNodes.indexOf(node) != -1){  // add ring just for highlighted nodes
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, NODE_R * 1.4, 0, 2 * Math.PI, false);
+            ctx.fillStyle = 'red';
+            ctx.fill();  
+          }
+
+          // draw the node
+          ctx.beginPath(); 
+          ctx.arc(node.x, node.y, NODE_R, 0, 2 * Math.PI, false);
+          if(solveWorlds.indexOf(node.id) != -1){
+            ctx.fillStyle = 'green';
+          }else{
+            let reachableWorlds = [];
+            for(let j = 0; j < this.props.worlds.length; j++){
+              if(!this.props.worlds[j].parents){
+                reachableWorlds.push(j);
+              }else if(this.props.worlds[j].parents.every((p) => solveWorlds.indexOf(p) != -1) &&
+                    this.props.worlds[j].parents.every((p) => reachableWorlds.indexOf(p) != -1)){
+                reachableWorlds.push(j);
+              }
+            }
+            ctx.fillStyle = reachableWorlds.indexOf(node.id) != -1 ? 'blue' : 'gray';
+          }
+          ctx.fill();  
+
+          // write the world name
+          const label = node.worldData.name;
+          const fontSize = 12/globalScale;
+          ctx.font = `${fontSize}px Sans-Serif`;
+          const textWidth = ctx.measureText(label).width;
+          const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2); // some padding
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] - NODE_R * 1.5, ...bckgDimensions);
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = 'black';
+          ctx.fillText(label, node.x, node.y - bckgDimensions[1]/2 - NODE_R * 1.5);
+        };
+
 
         const graphRef = React.useRef(null);
         React.useEffect(()=>{
           const fg = graphRef.current;
-          fg.d3Force('collide', d3.forceCollide(20));
-          fg.d3Force("link", d3.forceLink().id(function (d) { return d.id; }).distance(50).strength(1))
-          fg.d3Force("charge", d3.forceManyBody().strength(-40))
+          if(this.state.world != -1){
+            fg.d3Force('collide', null);
+            fg.d3Force("link", null)
+            fg.d3Force("charge", null)  
+          }else{
+            fg.d3Force('collide', d3.forceCollide(30));
+            fg.d3Force("link", d3.forceLink().id(function (d) { return d.id; }).distance(50).strength(1))
+            fg.d3Force("charge", d3.forceManyBody().strength(-40))  
+          }
         });
 
         return <ForceGraph2D
           ref={graphRef}
           width={props.width}
           height={props.height}
-          graphData={graphData}
+          graphData={this.graphData}
           nodeRelSize={NODE_R}
           linkWidth={5}
           linkDirectionalParticles={0}
           linkDirectionalArrowLength={10}
-          nodeCanvasObjectMode={node => highlightNodes.indexOf(node) !== -1 ? 'before' : undefined}
-          nodeCanvasObject={paintRing}
+          nodeCanvasObject={(node, ctx, globalScale) => {paintNode(node, ctx, globalScale, this.state.solvedWorlds, highlightNodes)}}
           onNodeHover={handleNodeHover}
           onNodeClick={(node) => {this.gotoWorld(node.id)}}
           nodeLabel={(node) => {
@@ -905,7 +1019,7 @@ class Game extends React.Component<GameProps, GameState> {
         />;
       };
 
-      const content = <Level fileName={this.props.fileName} key={"intto"} levelData={this.props.introData} 
+      const content = <Level fileName={this.props.fileName} key={"intro"} levelData={this.props.introData} 
       onDidCursorMove={(c) => {}}/>;
 
       return (
@@ -925,22 +1039,16 @@ class Game extends React.Component<GameProps, GameState> {
     const worldData = this.props.worlds[this.state.world];
     const key = "" + this.state.world + "," + this.state.level;
 
-    let worldLabel = worldData.name;
-    let worldButtonsPanel = (
-      <div key={this.state.world} style={{ width: '100%', height: '2em', top: '0em', position: 'fixed' }}>
-        <button disabled={ this.state.world == 0 } 
-          style={{ 
-            float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
-          }} onClick={() => { this.gotoWorld.call(this, this.state.world - 1); }}> Previous World </button>
-        <button disabled={ this.state.world == this.props.worlds.length - 1 } 
-          style={{
-            float: 'right', borderStyle: 'ridge', width: '20%', height: '100%'
-          }} onClick={() => { this.gotoWorld.call(this, this.state.world + 1); }}> Next World </button>
-        <div style={{ textAlign: 'center' }}><h3><Text content={worldLabel}/></h3></div>
+    const worldLabel = (
+      <div style={{ textAlign: 'center' }}>
+        <h3>
+          <Text content={
+            (this.state.solvedWorlds.indexOf(this.state.world) != -1 ? "&#10004; " : "") +
+            worldData.name}/>
+        </h3>
       </div>
     );
-
-    worldButtonsPanel = (
+    const worldButtonsPanel = (
       <div>
         <div key={this.state.world} style={{ width: '100%', height: '2em', top: '0em', position: 'fixed' }}>
           <button
@@ -948,26 +1056,35 @@ class Game extends React.Component<GameProps, GameState> {
               float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
             }} onClick={() => { this.setState({introPage : true}) }}> Main Menu </button>
         </div>
-        <div style={{ textAlign: 'center' }}><h3><Text content={worldLabel}/></h3></div>
+        {worldLabel}
       </div>
     );
 
 
-    let levelLabel = "Level " + (this.state.level + 1);
-    if(worldData.levels[this.state.level].name){
-      levelLabel += " -- " + worldData.levels[this.state.level].name
-    }
-    const levelButtonsPanel = <div key={key} style={{ width: '100%', height: '2em', top: '2em', position: 'fixed' }}>
-      <button disabled={ this.state.level == 0 } 
-        style={{
-          float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
-        }} onClick={() => { this.gotoLevel.call(this, this.state.level - 1); }}> Previous Level </button>
-      <button disabled={ this.state.level == worldData.levels.length - 1 } 
-        style={{ 
-          float: 'right', borderStyle: 'ridge', width: '20%', height: '100%' 
-        }} onClick={() => { this.gotoLevel.call(this, this.state.level + 1); }}> Next Level </button>
-      <div style={{ textAlign: 'center' }}><h4><Text content={levelLabel}/></h4></div>
-    </div>;
+    const levelLabel = (
+      <div style={{ textAlign: 'center' }}>
+        <h4>
+          <Text content={
+            (this.state.solvedLevels.indexOf(key) != -1 ? "&#10004; " : "") +
+            "Level " + (this.state.level + 1) + 
+            (worldData.levels[this.state.level].name ? " -- " + worldData.levels[this.state.level].name : "")
+          }/>
+        </h4>
+      </div>
+    );
+    const levelButtonsPanel = (
+      <div key={key} style={{ width: '100%', height: '2em', top: '2em', position: 'fixed' }}>
+        <button disabled={ this.state.level == 0 } 
+          style={{
+            float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
+          }} onClick={() => { this.gotoLevel.call(this, this.state.level - 1); }}> Previous Level </button>
+        <button disabled={ this.state.level == worldData.levels.length - 1 } 
+          style={{ 
+            float: 'right', borderStyle: 'ridge', width: '20%', height: '100%' 
+          }} onClick={() => { this.gotoLevel.call(this, this.state.level + 1); }}> Next Level </button>
+        {levelLabel}
+      </div>
+    );
 
 
     const sideBarDiv = <SideBar worlds={this.props.worlds} world={this.state.world} level={this.state.level} ></SideBar>;
@@ -979,7 +1096,14 @@ class Game extends React.Component<GameProps, GameState> {
     let statementIsSolved = () => {
       if(this.state.latestProblemId != key) // another level is solved, not this one!
         return;
-      // console.log(key + " is SOLVED!");
+      if(this.state.solvedLevels.indexOf(key) != -1) // already solved
+        return;
+      let solvedLevels = this.state.solvedLevels.concat([key]);
+      let worldIsSolved = this.props.worlds[this.state.world].levels.every((levelData, l)=>{
+        return solvedLevels.indexOf("" + this.state.world + "," + l) > -1;
+      });
+      let solveWorlds = worldIsSolved ? this.state.solvedWorlds.concat([this.state.world]) : this.state.solvedWorlds;
+      this.setState({solvedLevels : solvedLevels, solvedWorlds : solveWorlds});
     };
         
     const infoViewDiv = <InfoView file={this.props.fileName} cursor={this.state.cursor} isSolved={statementIsSolved}/>;
@@ -1038,6 +1162,8 @@ window.indexedDB.deleteDatabase("leanlibrary").onsuccess = function(event) {
   
   // tslint:disable-next-line:no-var-requires
   (window as any).require(['vs/editor/editor.main'], () => {
+
+    seedrandom('0', { global: true }); // makes the behaviour of the graph predictable
 
     registerLeanLanguage(leanJsOpts, activeEditorData);
 
