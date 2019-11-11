@@ -17,6 +17,7 @@ import {
 
 import ForceGraph2D from 'react-force-graph-2d';
 import * as d3 from "d3";
+import { throws } from 'assert';
 
 const seedrandom = require("seedrandom");
 
@@ -324,7 +325,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
 
 
 // **********************************************************
-interface StatementObject { // theorem, lemma, definition or example
+interface ProvableObject { // theorem, lemma, definition or example
   type: string;
   text: string;
   lean: string;
@@ -339,7 +340,7 @@ interface StatementObject { // theorem, lemma, definition or example
   name?: string;
 }
 
-interface NonStatementObject { // comment, tactic, axiom or lean
+interface NonProvableObject { // comment, tactic, axiom or lean
   type: boolean;
   content: string;
   name?: string;
@@ -349,7 +350,7 @@ interface NonStatementObject { // comment, tactic, axiom or lean
 
 interface LevelData {
   name: string;
-  objects: Array<StatementObject|NonStatementObject>;
+  objects: Array<ProvableObject|NonProvableObject>;
   activeIndex?: number;
 }
 
@@ -498,14 +499,14 @@ class Text extends React.Component<TextProps, {}> {
 
 
 
-interface StatementProps extends StatementObject {
+interface ProvableProps extends ProvableObject {
   fileName: string;
   isActive: boolean;
   onDidCursorMove: (Position) => void;
 }
-class Statement extends React.Component<StatementProps, {}> {
+class Provable extends React.Component<ProvableProps, {}> {
 
-  constructor(props: StatementProps) {
+  constructor(props: ProvableProps) {
     super(props);
   }
 
@@ -591,7 +592,7 @@ class Level extends React.Component<LevelProps, LevelState> {
       }
       else if( itemData.type == "lemma" || itemData.type == "theorem" || itemData.type == "definition" || itemData.type == "example")
       {
-        return <Statement key={i}
+        return <Provable key={i}
                       fileName={this.props.fileName}
                       isActive={this.props.levelData.activeIndex == i} 
                       onDidCursorMove={this.props.onDidCursorMove}
@@ -620,9 +621,9 @@ interface SideBarState {
 }
 class SideBar extends React.Component<SideBarProps, SideBarState> {
   sideBarData : ({ 
-            'tactics' : NonStatementObject[], 
-            'sortedStatements' : (StatementObject|NonStatementObject)[][], // first dimension is the world number
-            'examples' : StatementObject[] 
+            'tactics' : NonProvableObject[], 
+            'sortedStatements' : (ProvableObject|NonProvableObject)[][], // first dimension is the world number
+            'examples' : ProvableObject[] 
           })[][];
 
   constructor(props: SideBarProps) {
@@ -804,6 +805,205 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
 }
 
 
+
+function getGraphData(worlds : Array<WorldData>){
+
+  let x : Array<number> = new Array(worlds.length).fill(0);
+  let y : Array<number> = new Array(worlds.length).fill(0);
+  let worldsWithY = [];
+  for(let i = 0; i < worlds.length; i++){
+    let p = worlds[i].parents;
+    if(p){
+      for(let j = 0; j < p.length; j++){
+        y[i] = y[i] > y[p[j]] + 1 ? y[i] : y[p[j]] + 1;
+      }
+    }
+    if(worldsWithY.length <= y[i]){
+      worldsWithY.push([]);
+    }
+    x[i] = worldsWithY[y[i]].length;
+    worldsWithY[y[i]].push(i);
+  }
+
+  let find_perm = (a : Array<number>, cost : (a_k:number, k:number) => number ) => { 
+    // return the permutation where the cost is minumum
+    // cost of [a_0, a_1, a_2, ..., a_{n-1}] = cost(a_0, 0) + cost(a_1, 1) + ... + cost(a_{n-1}, n-1)
+    let swap = (a : Array<number>, i : number, j : number) => {
+      let t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    let permute = (a : Array<number>, n : number) => { // only look at a[0], a[1], ..., a[n-1]
+      if(n == 1){
+        return [ [a[0]] , cost(a[0], 0)];
+      }
+      let output = [null, null]; // = [output_array, output_cost]
+      for (let i = 0; i < n; i++) {
+        swap(a, i, n-1);
+        let temp = permute(a, n-1);
+        temp[1] += cost(a[n-1], n-1);
+        if(!output[1] || output[1] > temp[1]){
+          output = [ temp[0].push(a[n-1]), temp[1] ];
+        }
+        swap(a, i, n-1);
+      }
+      return output;
+    }
+    return permute(a, a.length)[0];
+  }
+
+  for(let i = 0; i < worlds.length + 1; i++){
+    if(!worldsWithY[i]) break;
+    let cost = (w, j) => { // keep the x value of worlds[w] close to its parents
+      if(!worlds[w].parents) return 0;
+      let c = 0;
+      for(let p = 0; p < worlds[w].parents.length; p++){
+        c += Math.abs(j - x[worlds[w].parents[p]]);
+      }
+      return c;
+    }
+    let temp = find_perm(worldsWithY[i], cost);
+    for(let j = 0; j < temp.length; j++){
+      x[temp[j]] = j;
+    }
+  }
+
+  x = x.map((t) => t * 60);
+  y = y.map((t) => t * 80);
+
+  return {
+    nodes : worlds.map((w, i) => ({id : i, x : x[i], y : y[i], worldData : w})),
+    links : [].concat(... worlds.map((w, i) =>{
+      if(!w.parents) return [];
+      return w.parents.map((p)=>({source : p, target : i}));
+    })),
+    deltaX : Math.max(...x) + 2*60,
+    deltaY : Math.max(...y) + 2*80
+  };
+}
+
+
+interface GraphProps {
+  graphData: any;
+  worlds: Array<WorldData>;
+  solvedWorlds: Array<number>;
+  world: number;
+  width: number;
+  height: number;
+  gotoWorld: (w) => void;
+}
+
+interface GraphState{
+  highlightWorld: number;
+}
+class Graph extends React.Component<GraphProps, GraphState> {
+  graphRef: any;
+  scale: number = 1.0;
+
+  constructor(props: GraphProps) {
+    super(props);
+    this.state = {
+      highlightWorld: -1
+    };
+    this.graphRef = React.createRef();
+  }
+
+  handleNodeHover(node){
+    if(node && this.state.highlightWorld != node.id)
+      this.setState({highlightWorld : node.id});
+  }
+
+  paintNode(node, ctx, globalScale, node_R, fontSize){
+
+    if(node.id == this.state.highlightWorld){  // add ring just for highlighted nodes
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, node_R * 1.4, 0, 2 * Math.PI, false);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+    }
+
+    // draw the node
+    ctx.beginPath(); 
+    ctx.arc(node.x, node.y, node_R, 0, 2 * Math.PI, false);
+    if(this.props.solvedWorlds.indexOf(node.id) != -1){
+      ctx.fillStyle = 'green';
+    }else{
+      let reachableWorlds = [];
+      for(let j = 0; j < this.props.worlds.length; j++){
+        if(!this.props.worlds[j].parents){
+          reachableWorlds.push(j);
+        }else if(this.props.worlds[j].parents.every((p) => this.props.solvedWorlds.indexOf(p) != -1) &&
+              this.props.worlds[j].parents.every((p) => reachableWorlds.indexOf(p) != -1)){
+          reachableWorlds.push(j);
+        }
+      }
+      ctx.fillStyle = reachableWorlds.indexOf(node.id) != -1 ? 'blue' : 'gray';
+    }
+    ctx.fill();  
+
+    // write the world name
+    const label = node.worldData.name;
+    const scaledFontSize = fontSize/globalScale;
+    ctx.font = `${scaledFontSize}px Sans-Serif`;
+    const textWidth = ctx.measureText(label).width;
+    const bckgDimensions = [textWidth, scaledFontSize].map(n => n + scaledFontSize * 0.2); // some padding
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] - node_R * 1.5, ...bckgDimensions);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'black';
+    ctx.fillText(label, node.x, node.y - bckgDimensions[1]/2 - node_R * 1.5);
+  };
+
+  componentDidMount(){
+    let collideValue = 30 * this.scale;
+    let linkDistance = 50 * this.scale;
+    let chargeStrength = -40 * this.scale;
+
+    const fg = this.graphRef.current;
+    if(this.props.world != -1){
+      fg.d3Force('collide', null);
+      fg.d3Force("link", null)
+      fg.d3Force("charge", null)  
+    }else{
+      fg.d3Force('collide', d3.forceCollide(collideValue));
+      fg.d3Force("link", d3.forceLink().id(function (d) { return d.id; }).distance(linkDistance).strength(1));
+      fg.d3Force("charge", d3.forceManyBody().strength(chargeStrength));
+    }
+  }
+
+  render(){
+    this.scale = 0.5 * Math.min( this.props.width/this.props.graphData.deltaX, this.props.height/this.props.graphData.deltaY );
+
+    let node_R = 10 * this.scale;
+    let dagLevelDistance = 80 * this.scale;
+    let fontSize = 12 * this.scale;
+
+    return <ForceGraph2D
+      ref={this.graphRef}
+      width={this.props.width}
+      height={this.props.height}
+      graphData={this.props.graphData}
+      nodeRelSize={node_R}
+      linkWidth={5}
+      linkDirectionalParticles={0}
+      linkDirectionalArrowLength={10}
+      nodeCanvasObject={(node, ctx, globalScale) => {this.paintNode.call(this, node, ctx, globalScale, node_R, fontSize)}}
+      onNodeHover={this.handleNodeHover.bind(this)}
+      onNodeClick={(node) => {this.props.gotoWorld(node.id)}}
+      nodeLabel={(node) => {
+        return markdownConverter.makeHtml(this.props.worlds[node.id].name);
+      }}
+      enableNodeDrag={false}
+      enableZoomPanInteraction={false}
+      dagMode="td"
+      dagLevelDistance={dagLevelDistance}
+    />;
+  };
+  
+}
+
+
+
+
 interface GameProps {
   fileName: string;
   worlds: Array<WorldData>;
@@ -832,76 +1032,8 @@ class Game extends React.Component<GameProps, GameState> {
       solvedWorlds: []
     };
 
-    if(!this.graphData){
-
-      let worlds = this.props.worlds;
-      let x = new Array(worlds.length).fill(0);
-      let y = new Array(worlds.length).fill(0);
-      let worldsWithY = [];
-      for(let i = 0; i < worlds.length; i++){
-        let p = worlds[i].parents;
-        if(p){
-          for(let j = 0; j < p.length; j++){
-            y[i] = y[i] > y[p[j]] + 1 ? y[i] : y[p[j]] + 1;
-          }
-        }
-        if(worldsWithY.length <= y[i]){
-          worldsWithY.push([]);
-        }
-        x[i] = worldsWithY[y[i]].length;
-        worldsWithY[y[i]].push(i);
-      }
-
-      let find_perm = (a : Array<number>, cost : (a_k:number, k:number) => number ) => { 
-        // return the permutation where the cost is minumum
-        // cost of [a_0, a_1, a_2, ..., a_{n-1}] = cost(a_0, 0) + cost(a_1, 1) + ... + cost(a_{n-1}, n-1)
-        let swap = (a : Array<number>, i : number, j : number) => {
-          let t = a[i]; a[i] = a[j]; a[j] = t;
-        }
-        let permute = (a : Array<number>, n : number) => { // only look at a[0], a[1], ..., a[n-1]
-          if(n == 1){
-            return [ [a[0]] , cost(a[0], 0)];
-          }
-          let output = [null, null]; // = [output_array, output_cost]
-          for (let i = 0; i < n; i++) {
-            swap(a, i, n-1);
-            let temp = permute(a, n-1);
-            temp[1] += cost(a[n-1], n-1);
-            if(!output[1] || output[1] > temp[1]){
-              output = [ temp[0].push(a[n-1]), temp[1] ];
-            }
-            swap(a, i, n-1);
-          }
-          return output;
-        }
-        return permute(a, a.length)[0];
-      }
-
-      for(let i = 0; i < worlds.length + 1; i++){
-        if(!worldsWithY[i]) break;
-        let cost = (w, j) => { // keep the x value of worlds[w] close to its parents
-          if(!worlds[w].parents) return 0;
-          let c = 0;
-          for(let p = 0; p < worlds[w].parents.length; p++){
-            c += Math.abs(j - x[worlds[w].parents[p]]);
-          }
-          return c;
-        }
-        let temp = find_perm(worldsWithY[i], cost);
-        for(let j = 0; j < temp.length; j++){
-          x[temp[j]] = j;
-        }
-      }
-
-      this.graphData = {
-        'nodes' : this.props.worlds.map((w, i) => ({"id" : i, x : x[i]*40, y : y[i]*40, worldData : w})),
-        'links' : [].concat(... this.props.worlds.map((w, i) =>{
-          if(!w.parents) return [];
-          return w.parents.map((p)=>({'source' : p, 'target' : i}));
-        }))
-      };
-    }
-
+    if(!this.graphData)
+      this.graphData = getGraphData(this.props.worlds);
   }
 
   goto(world: number, level: number){
@@ -929,107 +1061,41 @@ class Game extends React.Component<GameProps, GameState> {
     this.goto(this.state.world, l);
   }
 
-  render() {
+  windowResize(){
+    this.forceUpdate();
+  }
 
+  componentDidMount() {
+    window.addEventListener('resize', this.windowResize.bind(this));
+  }
+  
+  componentWillUnmount() {
+    window.removeEventListener('resize', this.windowResize.bind(this));
+  }
+
+  render() {
     if(this.state.introPage){
 
-      const TheGraph = (props) => {
-        let NODE_R = 10;
-        const [highlightNodes, setHighlightNodes] = React.useState([]);
-        const handleNodeHover = React.useCallback(node => {
-          setHighlightNodes(node ? [node] : []);
-        }, [setHighlightNodes]);
-
-        const paintNode = (node, ctx, globalScale, solveWorlds, highlightNodes) => {
-
-          if(highlightNodes.indexOf(node) != -1){  // add ring just for highlighted nodes
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, NODE_R * 1.4, 0, 2 * Math.PI, false);
-            ctx.fillStyle = 'red';
-            ctx.fill();  
-          }
-
-          // draw the node
-          ctx.beginPath(); 
-          ctx.arc(node.x, node.y, NODE_R, 0, 2 * Math.PI, false);
-          if(solveWorlds.indexOf(node.id) != -1){
-            ctx.fillStyle = 'green';
-          }else{
-            let reachableWorlds = [];
-            for(let j = 0; j < this.props.worlds.length; j++){
-              if(!this.props.worlds[j].parents){
-                reachableWorlds.push(j);
-              }else if(this.props.worlds[j].parents.every((p) => solveWorlds.indexOf(p) != -1) &&
-                    this.props.worlds[j].parents.every((p) => reachableWorlds.indexOf(p) != -1)){
-                reachableWorlds.push(j);
-              }
-            }
-            ctx.fillStyle = reachableWorlds.indexOf(node.id) != -1 ? 'blue' : 'gray';
-          }
-          ctx.fill();  
-
-          // write the world name
-          const label = node.worldData.name;
-          const fontSize = 12/globalScale;
-          ctx.font = `${fontSize}px Sans-Serif`;
-          const textWidth = ctx.measureText(label).width;
-          const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2); // some padding
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-          ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] - NODE_R * 1.5, ...bckgDimensions);
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = 'black';
-          ctx.fillText(label, node.x, node.y - bckgDimensions[1]/2 - NODE_R * 1.5);
-        };
-
-
-        const graphRef = React.useRef(null);
-        React.useEffect(()=>{
-          const fg = graphRef.current;
-          if(this.state.world != -1){
-            fg.d3Force('collide', null);
-            fg.d3Force("link", null)
-            fg.d3Force("charge", null)  
-          }else{
-            fg.d3Force('collide', d3.forceCollide(30));
-            fg.d3Force("link", d3.forceLink().id(function (d) { return d.id; }).distance(50).strength(1))
-            fg.d3Force("charge", d3.forceManyBody().strength(-40))  
-          }
-        });
-
-        return <ForceGraph2D
-          ref={graphRef}
-          width={props.width}
-          height={props.height}
-          graphData={this.graphData}
-          nodeRelSize={NODE_R}
-          linkWidth={5}
-          linkDirectionalParticles={0}
-          linkDirectionalArrowLength={10}
-          nodeCanvasObject={(node, ctx, globalScale) => {paintNode(node, ctx, globalScale, this.state.solvedWorlds, highlightNodes)}}
-          onNodeHover={handleNodeHover}
-          onNodeClick={(node) => {this.gotoWorld(node.id)}}
-          nodeLabel={(node) => {
-            return markdownConverter.makeHtml(this.props.worlds[node.id].name);
-          }}
-          enableNodeDrag={false}
-          enableZoomPanInteraction={false}
-          dagMode="td"
-          dagLevelDistance={60}
-        />;
-      };
-
       const content = <Level fileName={this.props.fileName} key={"intro"} levelData={this.props.introData} 
-      onDidCursorMove={(c) => {}}/>;
+          onDidCursorMove={(c) => {}}/>;
+
+      const graphDiv = <Graph graphData={this.graphData} worlds={this.props.worlds} world={this.state.world} 
+                            solvedWorlds={this.state.solvedWorlds} gotoWorld={this.gotoWorld.bind(this)} 
+                            width={window.innerWidth*0.4} height={window.innerHeight}/>;
 
       return (
-        <div>
+        <div style={{ position: 'fixed', top: '0', bottom: '0', left: '0', right: '0'}}>
           <Container style={{ height: '100%' }}>
           <Section defaultSize={window.innerWidth*0.6}>
             {content}
           </Section>
+          <Bar size={5} hidden={true}/>
           <Section defaultSize={window.innerWidth*0.4}>
-            <TheGraph width={window.innerWidth*0.4} height={window.innerHeight}/>
+            <div style={{
+              width: '100%', height: '100%', boxSizing: 'border-box',
+              borderStyle: 'double'}}>
+                {graphDiv}
+            </div>
           </Section>
         </Container>
         </div>
