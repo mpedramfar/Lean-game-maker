@@ -1,6 +1,7 @@
 # Lean Game Maker
 
-This prototype is a library which renders structured Lean files into an interactive game with a javascript Lean server running on the browser.
+This library renders structured Lean files into an interactive game with a javascript Lean server running on the browser.
+See the [Natural number game](https://wwwf.imperial.ac.uk/~buzzard/xena/natural_number_game/) for an implementation of this game.
 
 ## Installation
 
@@ -8,73 +9,12 @@ See the [installation guide](https://github.com/mpedramfar/Lean-game-maker/blob/
 
 ## Usage
 
-Make a Lean project and add a folder named `game` to the `src` path. For every world, add a folder to `game` and name them `world1`, `world2`, ... . Inside each world, add files `level1.lean`, `level2.lean`, ... for every level in the corresponding world. 
-Inside each Lean file, use the following format to add a title to each level or world:
+See the [usage guide](https://github.com/mpedramfar/Lean-game-maker/blob/master/USAGE.md).
 
-```lean
--- Level name : name_of_the_level
--- World name : name_of_the_world
-```
-Note that a world's name should be specified in the first level of the world.
-To add comments and lemmas, use this format :
+## Acknowledgements
 
-```lean
-/-
-Comment here
--/
-
-/- Lemma
-Description of the lemma
--/
-lemma ... :=
-begin
-  ...
-end
-```
-You can use Markdown in the comments. It will be compiled with [showdown](http://demo.showdownjs.com/).
-Theorems and examples are similar to lemmas. The only difference is that examples are shown with full solution in the webpage, but lemmas and theorems should be solved by the player.
-Note that only the first lemma or theorem that appears in any level is playable.
-Every theorem, lemma or example will be added to the side bar in the following levels.
-To prevent a lemma from appearing in the side bar, use the following format :
-
-```lean
-/- Lemma : no-side-bar
-Description of the lemma
--/
-lemma ... :=
-begin
-  ...
-end
-```
-The same goes for theorems and examples.
-You can also add description of tactics to the side bar by
-
-```lean
-/- Tactic : name_of_the_tactic
-Description of the tactic
--/
-```
-This description will be in the side bar from that level onward.
-If you want to add a statement to the list of theorem statements in the side bar without any mention in the main page, use the format :
-
-```lean
-/- Axiom : name_of_the_axiom
-statement_of_the_axiom
--/
-```
-This will appear in the side bar from that level onward.
-
-If a line in not contained in a comment, lemma, theorem, example or tactic, it will be shown directly in the game. If such a line ends with ` -- hide`, it will not be shown. Alternatively, you can put a few lines inside blocks of the following format.
-```lean
--- begin hide
-** comment and lean code here **
--- end hide
-```
-
-After preparing the Lean files, go to the root folder of your Lean project and run
-```bash
-make-lean-game
-```
-
-### Lean Server
-To make an interactive webpage, the javascript Lean server is used. In this repository, javascript servers for Lean 3.4.1 and Lean 3.4.2 are provided. If you're working with a different version, you need to add the required files to `src/interactive_interface/lean_server`. You would need three files, named `lean_js_js.js`, `lean_js_wasm.js` and `lean_js_wasm.wasm`.
+Special thanks to Bryan Gin-ge Chen and Patrick Massot.
+This project uses some codes from 
+[Bryan's fork of the lean-web-editor](https://github.com/bryangingechen/lean-web-editor)
+and
+[Patrick's Lean formatter](https://github.com/leanprover-community/format_lean).
