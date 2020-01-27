@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import zipfile, subprocess, json, re
 import glob, distutils.dir_util
 from pathlib import Path
@@ -82,7 +83,7 @@ class interactive_server:
                     print('Added {0} olean files from {1}'.format(num_olean[lib_name], lib_name))
         print('Created {0} with {1} olean files'.format(library_zip_fn, len(already_seen)))
 
-        library_prefix = library_zip_fn.split('.')[0]
+        library_prefix = os.path.splitext(library_zip_fn)[0]
         info_fn = library_prefix + '.info.json'
         with open(info_fn, 'w') as f:
                 json.dump(lib_info, f, separators=(',', ':'))
