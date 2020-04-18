@@ -497,9 +497,7 @@ class Text extends React.Component<TextProps, {}> {
     super(props);
   }
   render() {
-    let t = markdownConverter.makeHtml(this.props.content);
-    console.log(t);
-    return <div dangerouslySetInnerHTML={{__html: t}}></div>;
+    return <div dangerouslySetInnerHTML={{__html: markdownConverter.makeHtml(this.props.content)}}></div>;
   }
 }
 
