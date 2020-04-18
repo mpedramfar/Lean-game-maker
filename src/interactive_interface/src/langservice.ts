@@ -49,6 +49,9 @@ export interface editorTextDataInterface {
   lineOffset: number,
   fileContent: string,
   text: string,
+  world?: number,
+  level?: number,
+  saved?: boolean,
 }
 
 

@@ -26,6 +26,7 @@ const MathJax = require("MathJax");
 const showdown = require("showdown");
 let markdownConverter = new showdown.Converter({
   openLinksInNewWindow: true,
+  literalMidWordUnderscores: true,
 });
 
 
@@ -394,7 +395,10 @@ interface LeanEditorState {
 let activeEditorData: editorTextDataInterface = { 
   lineOffset: 0,
   fileContent: "",
-  text: ""
+  text: "",
+  world: -1,
+  level: 0,
+  saved: true,
 };
 
 class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
@@ -418,6 +422,7 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
     this.model.onDidChangeContent((e) => {
       activeEditorData.text = this.model.getValue();
       activeEditorData.fileContent = this.props.textBefore + this.model.getValue() + this.props.textAfter;
+      activeEditorData.saved = false;
       checkInputCompletionChange(e, this.editor, this.model);
     });
 
@@ -492,7 +497,9 @@ class Text extends React.Component<TextProps, {}> {
     super(props);
   }
   render() {
-    return <div dangerouslySetInnerHTML={{__html: markdownConverter.makeHtml(this.props.content)}}></div>;
+    let t = markdownConverter.makeHtml(this.props.content);
+    console.log(t);
+    return <div dangerouslySetInnerHTML={{__html: t}}></div>;
   }
 }
 
@@ -1009,13 +1016,14 @@ interface GameProps {
   worlds: Array<WorldData>;
   introData: LevelData;
   name: string;
+  world: number;
+  level: number;
 }
 interface GameState {
   world: number;
   level: number;
   cursor?: Position;
   latestProblemId?: string;
-  introPage: boolean;
   solvedLevels: Array<string>;
   solvedWorlds: Array<number>;
 }
@@ -1025,9 +1033,8 @@ class Game extends React.Component<GameProps, GameState> {
   constructor(props: GameProps) {
     super(props);
     this.state = {
-      world: -1,
-      level: 0,
-      introPage: true,
+      world: this.props.world,
+      level: this.props.level,
       solvedLevels: [],
       solvedWorlds: []
     };
@@ -1043,12 +1050,17 @@ class Game extends React.Component<GameProps, GameState> {
   
       if(statementData){
         (statementData as any).editorText = activeEditorData.text;
+        saveGame();
+        activeEditorData.saved = true;
       }  
     }
     
-    this.setState({ world: world, level: level, introPage: false });
+    this.setState({ world: world, level: level });
     this.props.worlds[world].lastVisitedLevel = level;
 
+    activeEditorData.world = world;
+    activeEditorData.level = level;
+    updateURL();
   }
 
   gotoWorld(w: number){
@@ -1074,7 +1086,7 @@ class Game extends React.Component<GameProps, GameState> {
   }
 
   render() {
-    if(this.state.introPage){
+    if(this.state.world == -1){
 
       const content = <Level fileName={this.props.fileName} key={"intro"} levelData={this.props.introData} 
           onDidCursorMove={(c) => {}}/>;
@@ -1117,10 +1129,18 @@ class Game extends React.Component<GameProps, GameState> {
     const worldButtonsPanel = (
       <div>
         <div key={this.state.world} style={{ width: '100%', height: '2em', top: '0em', position: 'fixed' }}>
-          <button
-            style={{ 
+          <button style={{ 
               float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
-            }} onClick={() => { this.setState({introPage : true}) }}> Main Menu </button>
+            }} onClick={() => { 
+              this.setState({world : -1});
+              activeEditorData.world = -1;
+              updateURL();
+            }}> Main Menu </button>
+          <button style={{ 
+              float: 'right', borderStyle: 'ridge', width: '20%', height:'100%'
+            }} onClick={() => {
+              resetGame();
+            }}> Reset </button>
         </div>
         {worldLabel}
       </div>
@@ -1217,14 +1237,81 @@ const metaPromise = fetch(leanJsOpts.libraryZip.slice(0, -3) + 'info.json')
   .then((res) => res.json())
   .then((j) => info = j);
 
+
+const localStorageVarName = 'game_data';
+let gameData;
+
+
+function updateURL(){
+  let u = new URL(window.location.href);
+  if(activeEditorData.world == -1){
+    u.search = "";
+  }else{
+    u.searchParams.set('world', String(activeEditorData.world + 1));
+    u.searchParams.set('level', String(activeEditorData.level + 1));
+  }
+  history.replaceState(null, null, u.href);
+}
+
+function readURL(){
+  activeEditorData.world = -1;
+  activeEditorData.level = 0;
+
+  let u = new URL(window.location.href);
+  if(u.searchParams.has('world') && u.searchParams.has('level')){
+    let w = Number(u.searchParams.get('world'));
+    let l = Number(u.searchParams.get('level'));
+    if(!isNaN(w) && !isNaN(l)){
+      if(w >= 1 && w <= gameData.worlds.length && l >= 1 && l <= gameData.worlds[w-1].levels.length){
+        activeEditorData.world = w - 1;
+        activeEditorData.level = l - 1;
+      }
+    }
+  }
+  updateURL();
+}
+
+
+function saveGame(){
+  localStorage.setItem(localStorageVarName, JSON.stringify(gameData));
+}
+
+function loadGame(){
+  let temp = JSON.parse(localStorage.getItem(localStorageVarName));
+  if(temp && temp['name']==gameData['name'] && temp['version']==gameData['version']){
+    gameData=temp;
+    return true;
+  }else{
+    return false;
+  }
+}
+
+function resetGame(){
+  let confirmationMessage = 'The game will reset and the progress will be lost.';
+  if(window.confirm(confirmationMessage)){
+    localStorage.removeItem(localStorageVarName);
+    activeEditorData.world = -1;
+    updateURL();
+    location.reload();
+  }
+}
+
+
+
 window.indexedDB.deleteDatabase("leanlibrary").onsuccess = function(event) {
 
   window.addEventListener("beforeunload", function (e) {
-    let confirmationMessage = 'Do you want to leave the game?'
-                            + '\nYour progress will be lost.';
-    (e || window.event).returnValue = confirmationMessage;
-    return confirmationMessage;
-  });
+    if(activeEditorData.world != -1){
+      let levelData = gameData.worlds[activeEditorData.world].levels[activeEditorData.level]
+      let statementData = levelData.objects[levelData.activeIndex];
+  
+      if(statementData){
+        (statementData as any).editorText = activeEditorData.text;
+        saveGame();
+        activeEditorData.saved = true;
+      }
+    }
+  });  
   
   // tslint:disable-next-line:no-var-requires
   (window as any).require(['vs/editor/editor.main'], () => {
@@ -1233,13 +1320,18 @@ window.indexedDB.deleteDatabase("leanlibrary").onsuccess = function(event) {
 
     registerLeanLanguage(leanJsOpts, activeEditorData);
 
-    const gameData = require('game_data') as GameData;
-    document.title = gameData.name;
+    const blankGameData = require('game_data') as GameData;
+    document.title = blankGameData.name;
+    gameData = blankGameData;
+    loadGame();
 
+    readURL();
+    
     const fn = monaco.Uri.file('test.lean').fsPath;
 
     render(
-        <Game fileName={fn} worlds={gameData.worlds} name={gameData.name} introData={gameData.introData}/>,
+        <Game fileName={fn} worlds={gameData.worlds} name={gameData.name} 
+                introData={gameData.introData} world={activeEditorData.world} level={activeEditorData.level}/>,
         document.getElementById('root'),
     );
   
