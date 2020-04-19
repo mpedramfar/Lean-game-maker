@@ -10,6 +10,7 @@ from lean_game_maker.line_reader import FileReader
 from lean_game_maker.objects import (default_line_handler, 
     HiddenBegin, HiddenEnd, 
     TextBegin, TextEnd,
+    HintBegin, HintEnd,
     TacticBegin, TacticEnd,
     AxiomBegin, AxiomEnd,
     ExampleBegin, ExampleEnd,
@@ -45,6 +46,7 @@ def render_lean_project(outdir=None, nolib=False):
     file_reader = FileReader(default_line_handler,
             [HiddenBegin, HiddenEnd,
              TextBegin, TextEnd,
+             HintBegin, HintEnd,
              TacticBegin, TacticEnd,
              AxiomBegin, AxiomEnd,
              ExampleBegin, ExampleEnd,
@@ -62,6 +64,9 @@ def render_lean_project(outdir=None, nolib=False):
 
 
     game_data = { 'name': game_config['name'] if 'name' in game_config else "Lean game", 'worlds' : [] }
+
+    if 'version' in game_config:
+        game_data['version'] = game_config['version']
 
     print(f"Intro page ...", end="")
     intro_file = game_config['intro']

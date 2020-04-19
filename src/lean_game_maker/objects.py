@@ -24,6 +24,14 @@ class LeanLines:
     def append(self, line):
         self.content += line
 
+@dataclass
+class Hint:
+    type: str = 'hint'
+    content: str = ''
+
+    def append(self, line):
+        self.content += line
+
 
 @dataclass
 class Tactic:
@@ -156,6 +164,33 @@ class TextEnd(LineReader):
             return False
         file_reader.reset()
         return True
+
+class HintBegin(LineReader):
+    regex = regex.compile(r'\s*/-\s*Hint\s*:\s*(.*)$', flags=regex.IGNORECASE)
+
+    def run(self, m, file_reader):
+        if file_reader.status is not '':
+            return False
+        file_reader.status = 'hint'
+        hint = Hint()
+        hint.title = m.group(1).strip()
+        file_reader.output.append(hint)
+        def normal_line(file_reader, line):
+            hint.append(line)
+        file_reader.normal_line_handler = normal_line
+        file_reader.blank_line_handler = normal_line
+        return True
+
+
+class HintEnd(LineReader):
+    regex = regex.compile(r'-/')
+
+    def run(self, m, file_reader):
+        if file_reader.status is not 'hint':
+            return False
+        file_reader.reset()
+        return True
+
 
 class TacticBegin(LineReader):
     regex = regex.compile(r'\s*/-\s*Tactic\s*:\s*(.*)$', flags=regex.IGNORECASE)

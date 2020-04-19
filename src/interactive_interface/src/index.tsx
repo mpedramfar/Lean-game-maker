@@ -502,6 +502,37 @@ class Text extends React.Component<TextProps, {}> {
 }
 
 
+interface HintProps {
+  title: string;
+  content: string;
+}
+class Hint extends React.Component<HintProps, {}> {
+  constructor(props: HintProps) {
+    super(props);
+  }
+  render() {
+    let tempDiv = document.createElement("div");
+    tempDiv.innerHTML = markdownConverter.makeHtml(this.props.title);
+    let markedTitle = tempDiv.children[0].innerHTML; // remove the <p></p> from the showdown output
+
+    return (
+      <div style={{fontSize: 'small', width: '100%' }}> 
+        <Accordion allowZeroExpanded={true}>
+          <AccordionItem>
+            <AccordionItemHeading>
+              <AccordionItemButton>
+                <div style={{display: "inline-block"}} dangerouslySetInnerHTML={{__html: markedTitle}}></div>
+              </AccordionItemButton>
+            </AccordionItemHeading>
+            <AccordionItemPanel>
+              <div dangerouslySetInnerHTML={{__html: markdownConverter.makeHtml(this.props.content)}}></div>
+            </AccordionItemPanel>
+          </AccordionItem>
+        </Accordion>
+      </div>);
+  }
+}
+
 
 
 interface ProvableProps extends ProvableObject {
@@ -590,6 +621,10 @@ class Level extends React.Component<LevelProps, LevelState> {
       if( itemData.type == "text" )
       {
         return <Text  key={i} content={(itemData as any).content}  />;
+      } 
+      else if( itemData.type == "hint" )
+      {
+        return <Hint key={i} title={(itemData as any).title}  content={(itemData as any).content}  />;
       } 
       else if( itemData.type == "lean" && (! (itemData as any).hidden))
       {
@@ -798,11 +833,11 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
 
     return (
       <div style={{fontSize: "small", overflowY: "auto", height: "100%", overflowX: "hidden"}}>
-      <Accordion allowMultipleExpanded={true} allowZeroExpanded={true}>
-        {tacticsAccordion}
-        {statementsAccordion}
-        {examplesAccordion}
-      </Accordion>
+        <Accordion allowMultipleExpanded={true} allowZeroExpanded={true}>
+          {tacticsAccordion}
+          {statementsAccordion}
+          {examplesAccordion}
+        </Accordion>
       </div>
     );
     

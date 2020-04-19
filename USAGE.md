@@ -59,11 +59,15 @@ Inside each Lean file, use the following format to add a title to each level or 
 ```lean
 -- Level name : name_of_the_level
 ```
-To add comments and lemmas, use this format :
+To add comments, hints and lemmas, use this format :
 
 ```lean
 /-
 Comment here
+-/
+
+/- Hint : title_of_the_hint
+Content of the hint
 -/
 
 /- Lemma
@@ -74,7 +78,7 @@ begin
   ...
 end
 ```
-You can use Markdown in the comments. It will be compiled with [showdown](http://demo.showdownjs.com/).
+You can use Markdown in comments and hints. It will be compiled with [showdown](http://demo.showdownjs.com/).
 Theorems and examples are similar to lemmas. The only difference is that examples are shown with full solution in the webpage, but lemmas and theorems should be solved by the player.
 Note that only the first lemma or theorem that appears in any level is playable.
 Every theorem, lemma or example will be added to the side bar in the following levels.
