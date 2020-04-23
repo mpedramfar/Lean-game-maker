@@ -21,7 +21,7 @@ import { throws } from 'assert';
 
 const seedrandom = require("seedrandom");
 
-const MathJax = require("MathJax");
+let MathJax = require("MathJax");
 
 const showdown = require("showdown");
 let markdownConverter = new showdown.Converter({
@@ -612,6 +612,11 @@ class Level extends React.Component<LevelProps, LevelState> {
 
 
   componentDidMount(){
+    if(!MathJax){
+      delete require.cache[require.resolve("MathJax")];
+      MathJax = require("MathJax");
+    }
+
     if(MathJax)
       MathJax.Hub.Queue(["Typeset",MathJax.Hub]);
   }
