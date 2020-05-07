@@ -353,6 +353,7 @@ interface LevelData {
   name: string;
   objects: Array<ProvableObject|NonProvableObject>;
   activeIndex?: number;
+  isSolved?: boolean;
 }
 
 interface WorldData {
@@ -360,6 +361,7 @@ interface WorldData {
   levels: Array<LevelData>;
   parents?: Array<number>;
   lastVisitedLevel?: number;
+  isSolved?: boolean;
 }
 
 interface GameData {
@@ -1070,11 +1072,25 @@ class Game extends React.Component<GameProps, GameState> {
 
   constructor(props: GameProps) {
     super(props);
+
+    let solvedLevels = [], solvedWorlds = [];
+    for(let w = 0; w < gameData.worlds.length; w++){
+      let worldData = gameData.worlds[w];
+      for(let l = 0; l < worldData.levels.length; l++){
+        let levelData = worldData.levels[l];
+        let key = "" + w + "," + l;
+        if(levelData.isSolved)
+          solvedLevels = solvedLevels.concat([key]);
+      }
+      if(worldData.isSolved)
+        solvedWorlds = solvedWorlds.concat([w]);
+    }
+    
     this.state = {
       world: this.props.world,
       level: this.props.level,
-      solvedLevels: [],
-      solvedWorlds: []
+      solvedLevels: solvedLevels,
+      solvedWorlds: solvedWorlds
     };
 
     if(!this.graphData)
@@ -1094,7 +1110,8 @@ class Game extends React.Component<GameProps, GameState> {
     }
     
     this.setState({ world: world, level: level });
-    this.props.worlds[world].lastVisitedLevel = level;
+    if(world != -1)
+      this.props.worlds[world].lastVisitedLevel = level;
 
     activeEditorData.world = world;
     activeEditorData.level = level;
@@ -1102,9 +1119,11 @@ class Game extends React.Component<GameProps, GameState> {
   }
 
   gotoWorld(w: number){
-    let l = this.props.worlds[w].lastVisitedLevel;
-    l = l ? l : 0;
-    this.goto(w, l);
+    let l = 0;
+    if((w != -1) && this.props.worlds[w].lastVisitedLevel){
+      l = this.props.worlds[w].lastVisitedLevel;
+    }
+    this.goto(w, l);  
   }
 
   gotoLevel(l: number){
@@ -1153,6 +1172,7 @@ class Game extends React.Component<GameProps, GameState> {
     }
 
     const worldData = this.props.worlds[this.state.world];
+    const levelData = worldData.levels[this.state.level];
     const key = "" + this.state.world + "," + this.state.level;
 
     const worldLabel = (
@@ -1169,16 +1189,10 @@ class Game extends React.Component<GameProps, GameState> {
         <div key={this.state.world} style={{ width: '100%', height: '2em', top: '0em', position: 'fixed' }}>
           <button style={{ 
               float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
-            }} onClick={() => { 
-              this.setState({world : -1});
-              activeEditorData.world = -1;
-              updateURL();
-            }}> Main Menu </button>
+            }} onClick= {() => { this.gotoWorld.call(this, -1); }}> Main Menu </button>
           <button style={{ 
               float: 'right', borderStyle: 'ridge', width: '20%', height:'100%'
-            }} onClick={() => {
-              resetGame();
-            }}> Reset </button>
+            }} onClick={() => { resetGame(); }}> Reset </button>
         </div>
         {worldLabel}
       </div>
@@ -1191,7 +1205,7 @@ class Game extends React.Component<GameProps, GameState> {
           <Text content={
             (this.state.solvedLevels.indexOf(key) != -1 ? "&#10004; " : "") +
             "Level " + (this.state.level + 1) + 
-            (worldData.levels[this.state.level].name ? " -- " + worldData.levels[this.state.level].name : "")
+            (levelData.name ? " -- " + levelData.name : "")
           }/>
         </h4>
       </div>
@@ -1213,7 +1227,7 @@ class Game extends React.Component<GameProps, GameState> {
 
     const sideBarDiv = <SideBar worlds={this.props.worlds} world={this.state.world} level={this.state.level} ></SideBar>;
 
-    const content = <Level fileName={this.props.fileName} key={key} levelData={worldData.levels[this.state.level]} 
+    const content = <Level fileName={this.props.fileName} key={key} levelData={levelData} 
         onDidCursorMove={(c) => {this.setState({cursor: c, latestProblemId: key})}}/>;
 
 
@@ -1222,12 +1236,13 @@ class Game extends React.Component<GameProps, GameState> {
         return;
       if(this.state.solvedLevels.indexOf(key) != -1) // already solved
         return;
+      levelData.isSolved = true;
       let solvedLevels = this.state.solvedLevels.concat([key]);
-      let worldIsSolved = this.props.worlds[this.state.world].levels.every((levelData, l)=>{
+      worldData.isSolved = this.props.worlds[this.state.world].levels.every((levelData, l)=>{
         return solvedLevels.indexOf("" + this.state.world + "," + l) > -1;
       });
-      let solveWorlds = worldIsSolved ? this.state.solvedWorlds.concat([this.state.world]) : this.state.solvedWorlds;
-      this.setState({solvedLevels : solvedLevels, solvedWorlds : solveWorlds});
+      let solvedWorlds = worldData.isSolved ? this.state.solvedWorlds.concat([this.state.world]) : this.state.solvedWorlds;
+      this.setState({solvedLevels : solvedLevels, solvedWorlds : solvedWorlds});
     };
         
     const infoViewDiv = <InfoView file={this.props.fileName} cursor={this.state.cursor} isSolved={statementIsSolved}/>;
