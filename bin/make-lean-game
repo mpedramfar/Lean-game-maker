@@ -7,8 +7,8 @@ import toml, jsonpickle, distutils.dir_util
 
 import lean_game_maker
 from lean_game_maker.line_reader import FileReader
-from lean_game_maker.objects import (default_line_handler, 
-    HiddenBegin, HiddenEnd, 
+from lean_game_maker.objects import (default_line_handler,
+    HiddenBegin, HiddenEnd,
     TextBegin, TextEnd,
     HintBegin, HintEnd,
     TacticBegin, TacticEnd,
@@ -32,7 +32,7 @@ def render_lean_project(outdir=None, nolib=False):
         return
     toolchain = leanpkg_toml['package']['lean_version']
 
-    
+
     outdir = outdir or 'html'
     Path(outdir).mkdir(exist_ok=True)
 
@@ -54,8 +54,8 @@ def render_lean_project(outdir=None, nolib=False):
              TheoremBegin, TheoremEnd,
              DefinitionBegin, DefinitionEnd,
              ProofBegin, ProofEnd ])
-    
-    
+
+
     game_config = toml.load('game_config.toml')
     ### TODO: check for errors
 
@@ -63,7 +63,7 @@ def render_lean_project(outdir=None, nolib=False):
         distutils.dir_util.copy_tree(str(Path('.')/game_config['extra_files']), str(Path(outdir)/game_config['extra_files']))
 
 
-    game_data = { 'name': game_config['name'] if 'name' in game_config else "Lean game", 'worlds' : [] }
+    game_data = { 'name': game_config.get('name', 'Lean game'), 'worlds' : [] }
 
     if 'version' in game_config:
         game_data['version'] = game_config['version']
@@ -97,7 +97,7 @@ def render_lean_project(outdir=None, nolib=False):
             file_reader.hard_reset()
             print(f"\r\tlevel {i+1} ... done")
 
-        if len(world_data['levels']) > 0:
+        if world_data['levels']:
             game_data['worlds'].append(world_data)
 
 
