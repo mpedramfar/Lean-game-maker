@@ -577,7 +577,15 @@ class Provable extends React.Component<ProvableProps, {}> {
         </div>
         }
         <div className="lemma_proof" >
-          <LeanColorize text="begin"/>
+          <div style={{ display: "flex", justifyContent: "space-between", width: "calc(100% - 2em)"}}>
+            <LeanColorize text="begin"/>
+            <button style={{ border: "none", background: "transparent" }} onClick={()=>{
+              let levelData = gameData.worlds[activeEditorData.world].levels[activeEditorData.level];
+              let statement = levelData.objects[levelData.activeIndex];
+              let text = statement.lean + "begin\n" + activeEditorData.text + "\nend";
+              navigator.clipboard.writeText(text);
+            }} title="Copy to clipboard" >&#x1f4cb;</button>
+          </div>
           {proof}
           <LeanColorize text="end"/>
         </div>

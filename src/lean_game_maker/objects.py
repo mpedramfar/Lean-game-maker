@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from typing import ClassVar, Match
+from typing import Match
 from dataclasses import dataclass
 import regex # type: ignore
 
@@ -11,7 +11,7 @@ from lean_game_maker.line_reader import LineReader, dismiss_line, FileReader
 ############
 @dataclass
 class Text:
-    type: ClassVar[str] = 'text'
+    type: str = 'text'
     content: str = ''
 
     def append(self, line: str) -> None:
@@ -19,24 +19,24 @@ class Text:
 
 @dataclass
 class LeanLines(Text):
-    type: ClassVar[str] = 'lean'
+    type: str = 'lean'
     hidden: bool = False
 
 @dataclass
 class Hint(Text):
-    type: ClassVar[str] = 'hint'
+    type: str = 'hint'
     title: str = ''
 
 
 @dataclass
 class Tactic(Text):
-    type: ClassVar[str] = 'tactic'
+    type: str = 'tactic'
     name: str = ''
     sideBar: bool = True
 
 @dataclass
 class Axiom(Text):
-    type: ClassVar[str] = 'axiom'
+    type: str = 'axiom'
     name: str = ''
     sideBar: bool = True
 
@@ -46,7 +46,7 @@ class Bilingual:
     """
     Base class for objects that contains both text and Lean code.
     """
-    type: ClassVar[str] = ''
+    type: str = ''
     text: str = ''
     lean: str = ''
     sideBar: bool = True
@@ -60,44 +60,37 @@ class Bilingual:
 
 @dataclass
 class Lemma(Bilingual):
-    type: ClassVar[str] = 'lemma'
+    type: str = 'lemma'
 
 
 @dataclass
 class Theorem(Bilingual):
-    type: ClassVar[str] = 'theorem'
+    type: str = 'theorem'
 
 
 @dataclass
 class Example(Bilingual):
-    type: ClassVar[str] = 'example'
+    type: str = 'example'
 
 
 @dataclass
 class Definition(Bilingual):
-    type: ClassVar[str] = 'definition'
+    type: str = 'definition'
 
 #################
 LEVEL_NAME_RE = regex.compile(r'^\s*--\s*Level name\s*:\s*(.*)', flags=regex.IGNORECASE)
-WORLD_NAME_RE = regex.compile(r'^\s*--\s*World name\s*:\s*(.*)', flags=regex.IGNORECASE)
 HIDDEN_LINE_RE = regex.compile(r'^.*--\s*hide\s*$', flags=regex.IGNORECASE)
 
 def default_line_handler(file_reader: FileReader, line: str) -> None:
     m = LEVEL_NAME_RE.match(line)
     if m:
         file_reader.name = m.group(1).strip()
-        return
-    m = WORLD_NAME_RE.match(line)
-    if m:
-        file_reader.world_name = m.group(1).strip()
-        return
-
-    if HIDDEN_LINE_RE.match(line):
-        file_reader.output.append(LeanLines(line, hidden=True))
-    elif file_reader.output and file_reader.output[-1].type == 'lean':
+    elif HIDDEN_LINE_RE.match(line):
+        file_reader.output.append(LeanLines(content=line, hidden=True))
+    elif file_reader.output and file_reader.output[-1].type == 'lean' and file_reader.output[-1].hidden == False:
         file_reader.output[-1].append(line)
     else:
-        file_reader.output.append(LeanLines(line))
+        file_reader.output.append(LeanLines(content=line))
 
 #################
 #  Line readers #
@@ -160,8 +153,7 @@ class HintBegin(LineReader):
         if file_reader.status:
             return False
         file_reader.status = 'hint'
-        hint = Hint()
-        hint.title = m.group(1).strip()
+        hint = Hint(title = m.group(1).strip())
         file_reader.output.append(hint)
         def normal_line(file_reader: FileReader, line: str) -> None:
             hint.append(line)
@@ -187,8 +179,7 @@ class TacticBegin(LineReader):
         if file_reader.status:
             return False
         file_reader.status = 'tactic'
-        tactic = Tactic()
-        tactic.sideBar = True
+        tactic = Tactic(sideBar=True)
         tactic.name = m.group(1).strip()
         file_reader.output.append(tactic)
         def normal_line(file_reader: FileReader, line: str) -> None:
@@ -214,8 +205,7 @@ class AxiomBegin(LineReader):
         if file_reader.status:
             return False
         file_reader.status = 'axiom'
-        axiom = Axiom()
-        axiom.sideBar = True
+        axiom = Axiom(sideBar=True)
         axiom.name = m.group(1).strip()
         file_reader.output.append(axiom)
         def normal_line(file_reader: FileReader, line: str) -> None:
@@ -302,8 +292,7 @@ class DefinitionBegin(LineReader):
         if file_reader.status:
             return False
         file_reader.status = 'definition_text'
-        defn = Definition()
-        defn.sideBar = False
+        defn = Definition(sideBar=False)
         file_reader.output.append(defn)
         def normal_line(file_reader: FileReader, line: str) -> None:
             defn.text_append(line)

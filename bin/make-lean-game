@@ -84,6 +84,11 @@ def render_lean_project(outdir=None, nolib=False):
             world_data['parents'] = [i - 1 for i in world_config['parents']]
 
         print(f"{world_data['name']} :")
+
+        if world_config.get('id', w+1) != w+1:
+            print("World id must start with 1 and increase by 1 at each world.")
+            return
+
         for i, level_address in enumerate(world_config['levels']):
             if not Path(level_address).exists():
                 print(f'The file "{level_address}" does not exist.')
@@ -99,6 +104,9 @@ def render_lean_project(outdir=None, nolib=False):
 
         if world_data['levels']:
             game_data['worlds'].append(world_data)
+        else:
+            print(f'World {w+1} has no levels.')
+            return
 
 
     with open(str(Path(outdir) / 'game_data.js'), 'w') as f:
