@@ -98,10 +98,10 @@ class interactive_server:
 
     def server_exists(self):
         p = Path(self.interactive_path / 'lean_server' / self.toolchain)
-        p.mkdir(exist_ok=True)
+        p.mkdir(parents=True, exist_ok=True)
         for f in ['lean_js_js.js', 'lean_js_wasm.js', 'lean_js_wasm.wasm']:
             if not (p / f).is_file():
-                print(f'Could not find the file "{p/f}" which is necessary to run Lean in the browser.')
+                print(f'\n\n Error: Could not find the file "{p/f}" which is necessary to run Lean in the browser.')
                 return False
         return True
 
