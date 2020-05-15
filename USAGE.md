@@ -134,5 +134,32 @@ make-lean-game --nolib
 ```
 This way the Lean-game-maker will not generate `library.zip`, so the command runs faster.
 
+You can run
+```bash
+make-lean-game --locale=CODE
+```
+to use translated content for the given language code (of course this can
+be combined with the `--nolib` flag). 
+
+## Internationalization
+
+After making the game, the project folder will contain a `locale`
+subfolder containing a translation template file `content.pot`.
+You can start a new translation by creating inside the `locale` folder
+a folder whose name will be a language code, say `fr`. Inside that
+folder, create a `LC_MESSAGES` folder containing a copy of `content.pot`
+named `content.po` (hence removing the final "t" which stands for
+"template"). You can then either edit this file by hand or use a
+dedicated software such as [poedit](https://poedit.net/).
+
+You can then use `make-lean-game --locale=fr` to use your new
+translation. 
+
+Afer updating the game, you can merge the template file
+by running, inside the `LC_MESSAGES` folder:
+```bash
+msgmerge content.po ../../content.pot | sponge content.po
+```
+
 ## Lean Server
 To make an interactive webpage, the javascript Lean server is used. In this repository, javascript servers for Lean 3.4.1 and Lean 3.4.2 are provided. If you're working with a different version, you need to add the required files to `src/interactive_interface/lean_server`. You would need three files, named `lean_js_js.js`, `lean_js_wasm.js` and `lean_js_wasm.wasm`.

@@ -1,9 +1,15 @@
 #! /usr/bin/env python3
 
 from pathlib import Path
-from fire import Fire
-import toml, jsonpickle, distutils.dir_util
+from datetime import datetime
+import subprocess
 
+import toml
+import jsonpickle
+import distutils.dir_util
+import gettext
+from polib import POFile, POEntry
+from fire import Fire
 
 import lean_game_maker
 from lean_game_maker.line_reader import FileReader
@@ -17,14 +23,14 @@ from lean_game_maker.objects import (default_line_handler,
     LemmaBegin, LemmaEnd,
     TheoremBegin, TheoremEnd,
     DefinitionBegin, DefinitionEnd,
-    ProofBegin, ProofEnd)
+    ProofBegin, ProofEnd, translate)
 
 from lean_game_maker.interactive_loader import interactive_server
 
 module_path = Path(lean_game_maker.__file__).parent
 interactive_path = module_path.parent / 'interactive_interface'
 
-def render_lean_project(outdir=None, nolib=False):
+def render_lean_project(outdir=None, nolib=False, locale='en'):
     try:
         leanpkg_toml = toml.load('leanpkg.toml')
     except FileNotFoundError:
@@ -62,8 +68,21 @@ def render_lean_project(outdir=None, nolib=False):
     if 'extra_files' in game_config and Path(game_config['extra_files']).is_dir():
         distutils.dir_util.copy_tree(str(Path('.')/game_config['extra_files']), str(Path(outdir)/game_config['extra_files']))
 
+    pot = POFile(check_for_duplicate=True)
+    pot.metadata = {
+	'Project-Id-Version': game_config['version'],
+	'POT-Creation-Date': str(datetime.now()),
+	'MIME-Version': '1.0',
+	'Content-Type': 'text/plain; charset=utf-8',
+    }
 
-    game_data = { 'name': game_config.get('name', 'Lean game'), 'worlds' : [] }
+    name = game_config.get('name', 'Lean game')
+    pot.append(POEntry(msgid=name, occurrences=[('game_config', '')]))
+    (Path('.')/'locale').mkdir(exist_ok=True)
+    translation = gettext.translation('content', localedir=Path('.')/'locale',
+            languages=[locale], fallback=True)
+    translation.install()
+    game_data = { 'name': _(name), 'worlds' : [] }
 
     if 'version' in game_config:
         game_data['version'] = game_config['version']
@@ -74,12 +93,15 @@ def render_lean_project(outdir=None, nolib=False):
         print(f'The file "{intro_file}" does not exist.')
         return
     file_reader.read_file(intro_file)
-    game_data['introData'] = jsonpickle.loads(jsonpickle.dumps({'objects' : file_reader.output}, unpicklable=True))
+    translate(file_reader.output, translation, pot, 'intro')
+    game_data['introData'] = jsonpickle.loads(jsonpickle.dumps(
+        {'objects' : file_reader.output}, unpicklable=True))
     file_reader.hard_reset()
     print(f"\rIntro page ... done")
 
     for w, world_config in enumerate(game_config['worlds']):
-        world_data = { 'name': world_config['name'] , 'levels' : [] }
+        pot.append(POEntry(msgid=world_config['name'], occurrences=[('world_config', '')]))
+        world_data = { 'name': _(world_config['name']) , 'levels' : [] }
         if 'parents' in world_config:
             world_data['parents'] = [i - 1 for i in world_config['parents']]
 
@@ -95,7 +117,8 @@ def render_lean_project(outdir=None, nolib=False):
                 return
             print(f"\tlevel {i+1} ...", end="")
             file_reader.read_file(level_address)
-            if len(file_reader.output) > 0:
+            if file_reader.output:
+                translate(file_reader.output, translation, pot, f"{world_config['name']} level {i+1}")
                 level_data = {'name': file_reader.name, 'objects' : file_reader.output}
                 level_data = jsonpickle.loads(jsonpickle.dumps(level_data, unpicklable=True))
                 world_data['levels'].append(level_data)
@@ -112,6 +135,11 @@ def render_lean_project(outdir=None, nolib=False):
     with open(str(Path(outdir) / 'game_data.js'), 'w') as f:
         temp = jsonpickle.encode(game_data, unpicklable=False)
         f.write("game_data = " + temp)
+
+    pot_path = Path('.')/'locale'/'content.pot'
+    pot.save(pot_path)
+    proc = subprocess.run(['msguniq', str(pot_path)], stdout=subprocess.PIPE)
+    pot_path.write_text(proc.stdout.decode())
 
 
 

@@ -1,31 +1,60 @@
 #!/usr/bin/env python3
-from typing import Match
+from typing import Match, List
 from dataclasses import dataclass
+from gettext import gettext, NullTranslations
+from pathlib import Path
+
 import regex # type: ignore
+from polib import POFile, POEntry # type: ignore
 
 from lean_game_maker.line_reader import LineReader, dismiss_line, FileReader
-
 
 ############
 #  Objects #
 ############
+
+class Translatable:
+    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
+        pass
+
+def translate(objects: List[Translatable], translation: NullTranslations, pot: POFile, occ: str) -> None:
+    for obj in objects:
+        obj.translate(translation, pot, occ)
+
 @dataclass
-class Text:
+class Text(Translatable):
     type: str = 'text'
     content: str = ''
 
     def append(self, line: str) -> None:
         self.content += line
 
+    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
+        pot.append(POEntry(msgid=self.content, occurrences=[(occ, '')]))
+        self.content = translation.gettext(self.content)
+
 @dataclass
 class LeanLines(Text):
     type: str = 'lean'
     hidden: bool = False
 
+    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
+        lean_lines = self.content.split('\n')
+        for i, line in enumerate(lean_lines):
+            if '--' in line and line.split('--')[-1].strip() != 'hide':
+                lean_lines[i] = translation.gettext(line)
+                pot.append(POEntry(msgid=line, occurrences=[(occ, '')]))
+        self.content = '\n'.join(lean_lines)
+
 @dataclass
 class Hint(Text):
     type: str = 'hint'
     title: str = ''
+
+    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
+        super().translate(pot, occ)
+        pot.append(POEntry(msgid=self.title, occurrences=[(occ, '')]))
+        self.title = translation.gettext(self.title)
 
 
 @dataclass
@@ -40,9 +69,12 @@ class Axiom(Text):
     name: str = ''
     sideBar: bool = True
 
+    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
+        pass
+
 
 @dataclass
-class Bilingual:
+class Bilingual(Translatable):
     """
     Base class for objects that contains both text and Lean code.
     """
@@ -56,6 +88,16 @@ class Bilingual:
 
     def lean_append(self, line):
         self.lean += line
+
+    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
+        self.text = translation.gettext(self.text)
+        pot.append(POEntry(msgid=self.text, occurrences=[(occ, '')]))
+        lean_lines = self.lean.split('\n')
+        for i, line in enumerate(lean_lines):
+            if '--' in line and line.split('--')[-1].strip() != 'hide':
+                lean_lines[i] = translation.gettext(line)
+                pot.append(POEntry(msgid=line, occurrences=[(occ, '')]))
+        self.lean = '\n'.join(lean_lines)
 
 
 @dataclass

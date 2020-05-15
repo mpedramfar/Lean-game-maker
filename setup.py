@@ -26,5 +26,5 @@ setup(
         '': ['*.css', '*.css.map', '*.js', 'templates/*'] + interactive_files,
     },
     scripts=['bin/make-lean-game'],
-    install_requires=['regex >= 2018.7.11', 'jinja2 >= 2.10', 'mistletoe >= 0.7.1', 'toml >= 0.10.0', 'fire >= 0.1.3', 'jsonpickle >= 1.2'])
+    install_requires=['regex >= 2018.7.11', 'jinja2 >= 2.10', 'mistletoe >= 0.7.1', 'toml >= 0.10.0', 'fire >= 0.1.3', 'jsonpickle >= 1.2', 'polib >= 1.1.0'])
 
