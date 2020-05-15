@@ -13,26 +13,20 @@ class FileReader:
             readers: Optional[List[Type['LineReader']]] = None):
         self.readers = [reader() for reader in readers] if readers else []
         self.filename = ''
-        self.status = ''
         self.default_line_handler = default_line_handler
-        self.normal_line_handler = self.default_line_handler
         self.hard_reset()
-        self.output: List = []
+
+    def hard_reset(self) -> None:
+        self.name = ''
+        self.activeIndex = -1 # The object self.output[self.activeIndex] is the problem in this level. TODO: change to 'problemIndex' in the next update of NNG.
         self.cur_line_nb = 1
-        self.name = ""
-        self.world_name = ""
+        self.output: List = []
+        self.reset()
 
     def reset(self) -> None:
         self.status = ''
         self.normal_line_handler = self.default_line_handler
         self.blank_line_handler = dismiss_line
-
-    def hard_reset(self) -> None:
-        self.name = ""
-        self.world_name = ""
-        self.reset()
-        self.cur_line_nb = 1
-        self.output = []
 
     def read_file(self, path: str) -> None:
         self.filename = path
@@ -56,13 +50,15 @@ class FileReader:
                 self.cur_line_nb += 1
 
             lines = self.raw_text.split("\n")
-            for o in self.output:
+            for i, o in enumerate(self.output):
+                if self.activeIndex == -1 and o.type in ['lemma', 'theorem', 'definition']:
+                    self.activeIndex = i
                 if hasattr(o, "firstProofLineNumber"):
                     o.textBefore = "\n".join(lines[ : o.firstProofLineNumber-1]) + "\n"
                     o.proof      = "\n".join(lines[o.firstProofLineNumber-1 : o.lastProofLineNumber])
                     o.textAfter  = "\n" + "\n".join(lines[o.lastProofLineNumber : ])
                     o.height     = o.lastProofLineNumber - o.firstProofLineNumber + 1
-                    o.editorText = o.proof if (o.type == "example") else "  sorry"
+                    o.editorText = o.proof if (o.type == "example") else "sorry"
                     o.lineOffset = o.firstProofLineNumber-1
 
                     m = regex.compile(r"^[^:\(\{\s]*([\s\S]*):=\s*$", regex.MULTILINE).match(o.lean)

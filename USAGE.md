@@ -118,6 +118,8 @@ If a line in not contained in a comment, lemma, theorem, example or tactic, it w
 -- end hide
 ```
 
+ * Note that the lean segment of different problems, the lines between `-/` and `begin`, must be distinct. Even if two problems are meant to be identical, this could be achieved by adding a space at the end of the lean segment of one of them. If two problems have identical lean segments, they will not be saved properly. (See "Version and saved games" below)
+
 ## Making the game
 
 After preparing the configuration file and the Lean files, go to the root folder of your Lean project and run
@@ -151,6 +153,8 @@ folder, create a `LC_MESSAGES` folder containing a copy of `content.pot`
 named `content.po` (hence removing the final "t" which stands for
 "template"). You can then either edit this file by hand or use a
 dedicated software such as [poedit](https://poedit.net/).
+After addding a translation, generate the file `content.mo`.
+In poedit, this can be done by simply clicking the save button.
 
 You can then use `make-lean-game --locale=fr` to use your new
 translation. 
@@ -160,6 +164,21 @@ by running, inside the `LC_MESSAGES` folder:
 ```bash
 msgmerge content.po ../../content.pot | sponge content.po
 ```
+
+## Version and saved games
+
+The progress of users in the game is stored in the `localStorage` of their browsers.
+The saved game data consists of name, version and a list of problems and the written answers.
+When the game loads, it compares the version of the saved game data and the current version of the game.
+If the versions are incompatible, as described below, then the saved game data is discarded and a new game starts.
+Otherwise, the game looks into the saved game data and the corresponding levels.
+If the lean segment of a problem, the lines between `-/` and `begin`, is unchanged after an update, the game will remember the saved answer for that problem from before.
+Any other problem, whose lean segement is not identical to the lean segment of a problem from before the update, is considered new and needs to be solved again.
+
+The `version` of the game is a string that may or may not contain any dots (the `.` character).
+If there are no dots, then major version is equal to the version. Otherwise, the major version is equal to the substring before the first dot.
+We say two versions are compatible if their corresponding major version is equal.
+
 
 ## Lean Server
 To make an interactive webpage, the javascript Lean server is used. In this repository, javascript servers for Lean 3.4.1 and Lean 3.4.2 are provided. If you're working with a different version, you need to add the required files to `src/interactive_interface/lean_server`. You would need three files, named `lean_js_js.js`, `lean_js_wasm.js` and `lean_js_wasm.wasm`.

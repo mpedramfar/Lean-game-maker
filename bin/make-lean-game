@@ -76,16 +76,14 @@ def render_lean_project(outdir=None, nolib=False, locale='en'):
 	'Content-Type': 'text/plain; charset=utf-8',
     }
 
-    name = game_config.get('name', 'Lean game')
-    pot.append(POEntry(msgid=name, occurrences=[('game_config', '')]))
     (Path('.')/'locale').mkdir(exist_ok=True)
     translation = gettext.translation('content', localedir=Path('.')/'locale',
             languages=[locale], fallback=True)
     translation.install()
-    game_data = { 'name': _(name), 'worlds' : [] }
 
-    if 'version' in game_config:
-        game_data['version'] = game_config['version']
+    name = game_config.get('name', 'Lean game')
+    pot.append(POEntry(msgid=name, occurrences=[('game_config', '')]))
+    game_data = { 'name': _(name), 'version': str(game_config.get('version', '')), 'worlds' : [] }
 
     print(f"Intro page ...", end="")
     intro_file = game_config['intro']
@@ -101,15 +99,21 @@ def render_lean_project(outdir=None, nolib=False, locale='en'):
 
     for w, world_config in enumerate(game_config['worlds']):
         pot.append(POEntry(msgid=world_config['name'], occurrences=[('world_config', '')]))
-        world_data = { 'name': _(world_config['name']) , 'levels' : [] }
-        if 'parents' in world_config:
-            world_data['parents'] = [i - 1 for i in world_config['parents']]
+        world_data = { 'name': _(world_config['name']), 'levels' : [] }
 
         print(f"{world_data['name']} :")
 
         if world_config.get('id', w+1) != w+1:
             print("World id must start with 1 and increase by 1 at each world.")
             return
+
+        if 'parents' in world_config:
+            world_data['parents'] = []
+            for i in world_config['parents']:
+                if i >= w:
+                    print("Parent ID must be smaller than the world ID.")
+                    return
+                world_data['parents'].append(i-1)
 
         for i, level_address in enumerate(world_config['levels']):
             if not Path(level_address).exists():
@@ -119,9 +123,12 @@ def render_lean_project(outdir=None, nolib=False, locale='en'):
             file_reader.read_file(level_address)
             if file_reader.output:
                 translate(file_reader.output, translation, pot, f"{world_config['name']} level {i+1}")
-                level_data = {'name': file_reader.name, 'objects' : file_reader.output}
+                level_data = {'name': file_reader.name, 'activeIndex': file_reader.activeIndex, 'objects' : file_reader.output}
                 level_data = jsonpickle.loads(jsonpickle.dumps(level_data, unpicklable=True))
                 world_data['levels'].append(level_data)
+            else:
+                print(f'\nThe file "{level_address}" is empty.')
+                return
             file_reader.hard_reset()
             print(f"\r\tlevel {i+1} ... done")
 
@@ -132,9 +139,9 @@ def render_lean_project(outdir=None, nolib=False, locale='en'):
             return
 
 
-    with open(str(Path(outdir) / 'game_data.js'), 'w') as f:
+    with open(str(Path(outdir) / 'game_data.json'), 'w') as f:
         temp = jsonpickle.encode(game_data, unpicklable=False)
-        f.write("game_data = " + temp)
+        f.write(temp)
 
     pot_path = Path('.')/'locale'/'content.pot'
     pot.save(pot_path)

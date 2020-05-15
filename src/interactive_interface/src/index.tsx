@@ -79,7 +79,7 @@ class LeanStatus extends React.Component<LeanStatusProps, LeanStatusState> {
 
 
 function leanColorize(text: string): string {
-  // TODO(gabriel): use promises
+  // TODO: use promises
   const colorized: string = (monaco.editor.colorize(text, 'lean', {}) as any)._value;
   return colorized.replace(/&nbsp;/g, ' ');
 }
@@ -352,7 +352,7 @@ interface NonProvableObject { // comment, tactic, axiom or lean
 interface LevelData {
   name: string;
   objects: Array<ProvableObject|NonProvableObject>;
-  activeIndex?: number;
+  activeIndex: number;
   isSolved?: boolean;
 }
 
@@ -366,6 +366,7 @@ interface WorldData {
 
 interface GameData {
   name: string;
+  version:string;
   worlds: Array<WorldData>;
   introData: LevelData;
 }
@@ -550,9 +551,12 @@ class Provable extends React.Component<ProvableProps, {}> {
 
   render() {
 
-    let proof;
+    let proof, copyButton;
     if( this.props.isActive ){
       proof = <LeanEditor {...this.props} readonly={this.props.type=="example"} />;
+      copyButton = <button style={{ border: "none", background: "transparent" }} onClick={()=>{
+        navigator.clipboard.writeText(this.props.lean + "begin\n" + activeEditorData.text + "\nend");
+      }} title="Copy to clipboard" >&#x1f4cb;</button>;
     } else {
       proof = <LeanColorize text={this.props.editorText}/>;
     }
@@ -579,12 +583,7 @@ class Provable extends React.Component<ProvableProps, {}> {
         <div className="lemma_proof" >
           <div style={{ display: "flex", justifyContent: "space-between", width: "calc(100% - 2em)"}}>
             <LeanColorize text="begin"/>
-            <button style={{ border: "none", background: "transparent" }} onClick={()=>{
-              let levelData = gameData.worlds[activeEditorData.world].levels[activeEditorData.level];
-              let statement = levelData.objects[levelData.activeIndex];
-              let text = statement.lean + "begin\n" + activeEditorData.text + "\nend";
-              navigator.clipboard.writeText(text);
-            }} title="Copy to clipboard" >&#x1f4cb;</button>
+            {copyButton}
           </div>
           {proof}
           <LeanColorize text="end"/>
@@ -608,18 +607,7 @@ class Level extends React.Component<LevelProps, LevelState> {
 
   constructor(props: LevelProps) {
     super(props);
-
-    let i = 0;
-    for(; i < this.props.levelData.objects.length; i++){
-      if(this.props.levelData.objects[i].type == "lemma" || 
-          this.props.levelData.objects[i].type == "theorem" ||
-          this.props.levelData.objects[i].type == "definition")
-        break;
-    }
-
-    this.props.levelData.activeIndex = (i < this.props.levelData.objects.length) ? i : -1;
   }
-
 
   componentDidMount(){
     if(!MathJax){
@@ -1082,8 +1070,8 @@ class Game extends React.Component<GameProps, GameState> {
     super(props);
 
     let solvedLevels = [], solvedWorlds = [];
-    for(let w = 0; w < gameData.worlds.length; w++){
-      let worldData = gameData.worlds[w];
+    for(let w = 0; w < this.props.worlds.length; w++){
+      let worldData = this.props.worlds[w];
       for(let l = 0; l < worldData.levels.length; l++){
         let levelData = worldData.levels[l];
         let key = "" + w + "," + l;
@@ -1108,22 +1096,19 @@ class Game extends React.Component<GameProps, GameState> {
   goto(world: number, level: number){
     if(this.state.world != -1){
       let levelData = this.props.worlds[this.state.world].levels[this.state.level]
-      let statementData = levelData.objects[levelData.activeIndex];
-  
-      if(statementData){
-        (statementData as any).editorText = activeEditorData.text;
+      if(levelData.activeIndex != -1){
+        let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
+        problemData.editorText = activeEditorData.text;
         saveGame();
         activeEditorData.saved = true;
-      }  
+      }
     }
     
     this.setState({ world: world, level: level });
     if(world != -1)
       this.props.worlds[world].lastVisitedLevel = level;
 
-    activeEditorData.world = world;
-    activeEditorData.level = level;
-    updateURL();
+    updateURL(world, level);
   }
 
   gotoWorld(w: number){
@@ -1286,116 +1271,187 @@ class Game extends React.Component<GameProps, GameState> {
 
 
 
-const leanJsOpts: LeanJsOpts = {
-  javascript: './lean_js_js.js',
-  libraryZip: './library.zip',
-  webassemblyJs: './lean_js_wasm.js',
-  webassemblyWasm: './lean_js_wasm.wasm',
-};
+//////////////////////////////////////////////////////////////////////////
 
-let info = null;
-const metaPromise = fetch(leanJsOpts.libraryZip.slice(0, -3) + 'info.json')
-  .then((res) => res.json())
-  .then((j) => info = j);
-
-
-const localStorageVarName = 'game_data';
-let gameData;
-
-
-function updateURL(){
+function updateURL(world: number, level: number){
   let u = new URL(window.location.href);
-  if(activeEditorData.world == -1){
+  if(world == -1){
     u.search = "";
   }else{
-    u.searchParams.set('world', String(activeEditorData.world + 1));
-    u.searchParams.set('level', String(activeEditorData.level + 1));
+    u.searchParams.set('world', String(world + 1));
+    u.searchParams.set('level', String(level + 1));
   }
+  activeEditorData.world = world;
+  activeEditorData.level = level;
   history.replaceState(null, null, u.href);
-}
-
-function readURL(){
-  activeEditorData.world = -1;
-  activeEditorData.level = 0;
-
-  let u = new URL(window.location.href);
-  if(u.searchParams.has('world') && u.searchParams.has('level')){
-    let w = Number(u.searchParams.get('world'));
-    let l = Number(u.searchParams.get('level'));
-    if(!isNaN(w) && !isNaN(l)){
-      if(w >= 1 && w <= gameData.worlds.length && l >= 1 && l <= gameData.worlds[w-1].levels.length){
-        activeEditorData.world = w - 1;
-        activeEditorData.level = l - 1;
-      }
-    }
-  }
-  updateURL();
-}
-
-
-function saveGame(){
-  localStorage.setItem(localStorageVarName, JSON.stringify(gameData));
-}
-
-function loadGame(){
-  let temp = JSON.parse(localStorage.getItem(localStorageVarName));
-  if(temp && temp['name']==gameData['name'] && temp['version']==gameData['version']){
-    gameData=temp;
-    return true;
-  }else{
-    return false;
-  }
 }
 
 function resetGame(){
   let confirmationMessage = 'The game will reset and the progress will be lost.';
   if(window.confirm(confirmationMessage)){
-    localStorage.removeItem(localStorageVarName);
-    activeEditorData.world = -1;
-    updateURL();
+    localStorage.removeItem('savedGameData');
+    updateURL(-1, 0);
     location.reload();
   }
 }
 
 
+let saveGame;
 
-window.indexedDB.deleteDatabase("leanlibrary").onsuccess = function(event) {
+function main(){
 
-  window.addEventListener("beforeunload", function (e) {
-    if(activeEditorData.world != -1){
-      let levelData = gameData.worlds[activeEditorData.world].levels[activeEditorData.level]
-      let statementData = levelData.objects[levelData.activeIndex];
-  
-      if(statementData){
-        (statementData as any).editorText = activeEditorData.text;
-        saveGame();
-        activeEditorData.saved = true;
+  const leanJsOpts: LeanJsOpts = {
+    javascript: './lean_js_js.js',
+    libraryZip: './library.zip',
+    webassemblyJs: './lean_js_wasm.js',
+    webassemblyWasm: './lean_js_wasm.wasm',
+  };
+
+  let gameData: GameData;
+
+
+  function readURL(gameData: GameData){
+    let world = -1, level = 0;
+
+    let u = new URL(window.location.href);
+    if(u.searchParams.has('world') && u.searchParams.has('level')){
+      let w = Number(u.searchParams.get('world'));
+      let l = Number(u.searchParams.get('level'));
+      if(!isNaN(w) && !isNaN(l)){
+        if(w >= 1 && w <= gameData.worlds.length && l >= 1 && l <= gameData.worlds[w-1].levels.length){
+          world = w - 1;
+          level = l - 1;
+        }
       }
     }
-  });  
+    updateURL(world, level);
+    return [world, level];
+  }
+
+  saveGame = function(){
+    let savedGameData = {name: gameData.name, version: gameData.version, data: []};
+    for(let w = 0; w < gameData.worlds.length; w++){
+      let worldData = gameData.worlds[w];
+      for(let l = 0; l < worldData.levels.length; l++){
+        let levelData = worldData.levels[l];
+        if(levelData.activeIndex != -1){
+          let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
+          savedGameData.data.push([problemData.lean, levelData.isSolved, problemData.editorText]);
+        }
+      }  
+    }
+
+    localStorage.setItem('savedGameData', JSON.stringify(savedGameData));
+  }
+
+
+  function loadGame(blankGameData: GameData) : GameData{
+    ///// TODO: This should be removed in the next update.
+    // This is included for backward compatibility.
+    // In previous versions, the entire "gameData" was saved in the localStrorage.
+    let oldStyleSavedGameData = JSON.parse(localStorage.getItem('game_data'));
+    if(oldStyleSavedGameData){
+      if(oldStyleSavedGameData.name == blankGameData.name && oldStyleSavedGameData.version == blankGameData.version){
+        for(let w = 0; w < blankGameData.worlds.length; w++){
+          let worldData = blankGameData.worlds[w];
+          let savedWorldData = oldStyleSavedGameData.worlds[w];
+          for(let l = 0; l < worldData.levels.length; l++){
+            let levelData = worldData.levels[l];
+            let savedLevelData = savedWorldData.levels[l];
   
-  // tslint:disable-next-line:no-var-requires
-  (window as any).require(['vs/editor/editor.main'], () => {
+            levelData.isSolved = savedLevelData.isSolved;
+            if(levelData.activeIndex != -1){
+              let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
+              let savedProblemData = savedLevelData.objects[savedLevelData.activeIndex] as ProvableObject;
+              problemData.editorText = savedProblemData.editorText;
+            }
+          }
+          worldData.isSolved = worldData.levels.every((levelData, l)=> levelData.isSolved );
+        } 
+      }
+      localStorage.removeItem('game_data');
+      return blankGameData;  
+    }
 
-    seedrandom('0', { global: true }); // makes the behaviour of the graph predictable
-
-    registerLeanLanguage(leanJsOpts, activeEditorData);
-
-    const blankGameData = require('game_data') as GameData;
-    document.title = blankGameData.name;
-    gameData = blankGameData;
-    loadGame();
-
-    readURL();
     
-    const fn = monaco.Uri.file('test.lean').fsPath;
+    let savedGameData = JSON.parse(localStorage.getItem('savedGameData'));
 
-    render(
-        <Game fileName={fn} worlds={gameData.worlds} name={gameData.name} 
-                introData={gameData.introData} world={activeEditorData.world} level={activeEditorData.level}/>,
-        document.getElementById('root'),
-    );
-  
-  });
-  
-};
+    function getMajorVersion(version: string): string{
+      let i = version.indexOf(".");
+      return (i == -1) ? version : version.slice(0,i);
+    }
+    if(!savedGameData || savedGameData.name != blankGameData.name 
+            || getMajorVersion(savedGameData.version) != getMajorVersion(blankGameData.version)){
+      return blankGameData;
+    }
+
+    for(let w = 0; w < blankGameData.worlds.length; w++){
+      let worldData = blankGameData.worlds[w];
+      for(let l = 0; l < worldData.levels.length; l++){
+        let levelData = worldData.levels[l];
+        if(levelData.activeIndex != -1){
+          let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
+          for(let i = 0; i < savedGameData.data.length; i++){
+            if(savedGameData.data[i][0] == problemData.lean){
+              levelData.isSolved = savedGameData.data[i][1];
+              problemData.editorText = savedGameData.data[i][2];
+            }
+          }  
+        }
+      }
+      worldData.isSolved = worldData.levels.every((levelData, l)=> levelData.isSolved );
+    }
+    return blankGameData;
+
+  }
+
+
+
+  window.indexedDB.deleteDatabase("leanlibrary").onsuccess = function(event) {
+
+    window.addEventListener("beforeunload", function (e) {
+      if(activeEditorData.world != -1){
+        let levelData = gameData.worlds[activeEditorData.world].levels[activeEditorData.level]
+        if(levelData.activeIndex != -1){
+          let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
+          problemData.editorText = activeEditorData.text;
+          saveGame();
+        }
+      }
+    });  
+    
+    // tslint:disable-next-line:no-var-requires
+    (window as any).require(['vs/editor/editor.main'], () => {
+
+      seedrandom('0', { global: true }); // makes the behaviour of the graph predictable
+
+      registerLeanLanguage(leanJsOpts, activeEditorData);
+
+      fetch('game_data.json', {cache: "no-cache"}).then((res)=>{
+        res.json().then((blankGameData)=>{
+
+          gameData = loadGame(blankGameData as GameData);
+          saveGame();
+          document.title = gameData.name;
+      
+          let wl = readURL(gameData);
+          activeEditorData.world = wl[0];
+          activeEditorData.level = wl[1];
+          
+          const fn = monaco.Uri.file('test.lean').fsPath;
+      
+          render(
+              <Game fileName={fn} worlds={gameData.worlds} name={gameData.name} 
+                      introData={gameData.introData} world={activeEditorData.world} level={activeEditorData.level}/>,
+              document.getElementById('root'),
+          );
+      
+        })
+      })
+    
+    });
+    
+  };
+}
+
+main();

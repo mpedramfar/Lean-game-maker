@@ -69,8 +69,6 @@ module.exports = {
     externals: {
         // react: 'require("react")',
         // 'react-dom': 'require("react-dom")',
-
-        'game_data'   : 'game_data',
         'MathJax'     : 'MathJax',
     },
 };
