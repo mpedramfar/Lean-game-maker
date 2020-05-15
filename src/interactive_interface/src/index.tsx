@@ -1360,9 +1360,10 @@ function main(){
             let savedLevelData = savedWorldData.levels[l];
   
             levelData.isSolved = savedLevelData.isSolved;
-            if(levelData.activeIndex != -1){
-              let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
-              let savedProblemData = savedLevelData.objects[savedLevelData.activeIndex] as ProvableObject;
+            let i = levelData.activeIndex;
+            if(i != -1){
+              let problemData = levelData.objects[i] as ProvableObject;
+              let savedProblemData = savedLevelData.objects[i] as ProvableObject;
               problemData.editorText = savedProblemData.editorText;
             }
           }
