@@ -39,9 +39,11 @@ class LeanLines(Text):
     hidden: bool = False
 
     def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
+        if self.hidden:
+            return
         lean_lines = self.content.split('\n')
         for i, line in enumerate(lean_lines):
-            if '--' in line and line.split('--')[-1].strip() != 'hide':
+            if '--' in line:
                 lean_lines[i] = translation.gettext(line)
                 pot.append(POEntry(msgid=line, occurrences=[(occ, '')]))
         self.content = '\n'.join(lean_lines)
@@ -52,7 +54,7 @@ class Hint(Text):
     title: str = ''
 
     def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
-        super().translate(pot, occ)
+        super().translate(translation, pot, occ)
         pot.append(POEntry(msgid=self.title, occurrences=[(occ, '')]))
         self.title = translation.gettext(self.title)
 
@@ -94,7 +96,7 @@ class Bilingual(Translatable):
         pot.append(POEntry(msgid=self.text, occurrences=[(occ, '')]))
         lean_lines = self.lean.split('\n')
         for i, line in enumerate(lean_lines):
-            if '--' in line and line.split('--')[-1].strip() != 'hide':
+            if '--' in line:
                 lean_lines[i] = translation.gettext(line)
                 pot.append(POEntry(msgid=line, occurrences=[(occ, '')]))
         self.lean = '\n'.join(lean_lines)
