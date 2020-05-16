@@ -352,7 +352,7 @@ interface NonProvableObject { // comment, tactic, axiom or lean
 interface LevelData {
   name: string;
   objects: Array<ProvableObject|NonProvableObject>;
-  activeIndex: number;
+  problemIndex: number;
   isSolved?: boolean;
 }
 
@@ -637,7 +637,7 @@ class Level extends React.Component<LevelProps, LevelState> {
       {
         return <Provable key={i}
                       fileName={this.props.fileName}
-                      isActive={this.props.levelData.activeIndex == i} 
+                      isActive={this.props.levelData.problemIndex == i} 
                       onDidCursorMove={this.props.onDidCursorMove}
                       {...itemData}
                       />;
@@ -1096,8 +1096,8 @@ class Game extends React.Component<GameProps, GameState> {
   goto(world: number, level: number){
     if(this.state.world != -1){
       let levelData = this.props.worlds[this.state.world].levels[this.state.level]
-      if(levelData.activeIndex != -1){
-        let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
+      if(levelData.problemIndex != -1){
+        let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
         problemData.editorText = activeEditorData.text;
         saveGame();
         activeEditorData.saved = true;
@@ -1334,8 +1334,8 @@ function main(){
       let worldData = gameData.worlds[w];
       for(let l = 0; l < worldData.levels.length; l++){
         let levelData = worldData.levels[l];
-        if(levelData.activeIndex != -1){
-          let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
+        if(levelData.problemIndex != -1){
+          let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
           savedGameData.data.push([problemData.lean, levelData.isSolved, problemData.editorText]);
         }
       }  
@@ -1346,7 +1346,7 @@ function main(){
 
 
   function loadGame(blankGameData: GameData) : GameData{
-    ///// TODO: This should be removed in the next update.
+    ///// TODO: This should be removed in a future update.
     // This is included for backward compatibility.
     // In previous versions, the entire "gameData" was saved in the localStrorage.
     let oldStyleSavedGameData = JSON.parse(localStorage.getItem('game_data'));
@@ -1360,7 +1360,7 @@ function main(){
             let savedLevelData = savedWorldData.levels[l];
   
             levelData.isSolved = savedLevelData.isSolved;
-            let i = levelData.activeIndex;
+            let i = levelData.problemIndex;
             let j = savedLevelData.activeIndex;
             if(i != -1 && !isNaN(j) && j != -1){
               let problemData = levelData.objects[i] as ProvableObject;
@@ -1391,8 +1391,8 @@ function main(){
       let worldData = blankGameData.worlds[w];
       for(let l = 0; l < worldData.levels.length; l++){
         let levelData = worldData.levels[l];
-        if(levelData.activeIndex != -1){
-          let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
+        if(levelData.problemIndex != -1){
+          let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
           for(let i = 0; i < savedGameData.data.length; i++){
             if(savedGameData.data[i][0] == problemData.lean){
               levelData.isSolved = savedGameData.data[i][1];
@@ -1414,8 +1414,8 @@ function main(){
     window.addEventListener("beforeunload", function (e) {
       if(activeEditorData.world != -1){
         let levelData = gameData.worlds[activeEditorData.world].levels[activeEditorData.level]
-        if(levelData.activeIndex != -1){
-          let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
+        if(levelData.problemIndex != -1){
+          let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
           problemData.editorText = activeEditorData.text;
           saveGame();
         }

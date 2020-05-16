@@ -123,7 +123,7 @@ def render_lean_project(outdir=None, nolib=False, locale='en'):
             file_reader.read_file(level_address)
             if file_reader.output:
                 translate(file_reader.output, translation, pot, f"{world_config['name']} level {i+1}")
-                level_data = {'name': file_reader.name, 'activeIndex': file_reader.activeIndex, 'objects' : file_reader.output}
+                level_data = {'name': file_reader.name, 'problemIndex': file_reader.problemIndex, 'objects' : file_reader.output}
                 level_data = jsonpickle.loads(jsonpickle.dumps(level_data, unpicklable=True))
                 world_data['levels'].append(level_data)
             else:

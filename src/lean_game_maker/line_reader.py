@@ -18,7 +18,7 @@ class FileReader:
 
     def hard_reset(self) -> None:
         self.name = ''
-        self.activeIndex = -1 # The object self.output[self.activeIndex] is the problem in this level. TODO: change to 'problemIndex' in the next update of NNG.
+        self.problemIndex = -1 # The object self.output[self.problemIndex] is the problem in this level.
         self.cur_line_nb = 1
         self.output: List = []
         self.reset()
@@ -51,8 +51,8 @@ class FileReader:
 
             lines = self.raw_text.split("\n")
             for i, o in enumerate(self.output):
-                if self.activeIndex == -1 and o.type in ['lemma', 'theorem', 'definition']:
-                    self.activeIndex = i
+                if self.problemIndex == -1 and o.type in ['lemma', 'theorem', 'definition']:
+                    self.problemIndex = i
                 if hasattr(o, "firstProofLineNumber"):
                     o.textBefore = "\n".join(lines[ : o.firstProofLineNumber-1]) + "\n"
                     o.proof      = "\n".join(lines[o.firstProofLineNumber-1 : o.lastProofLineNumber])
