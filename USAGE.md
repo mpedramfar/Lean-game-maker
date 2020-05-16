@@ -182,3 +182,6 @@ We say two versions are compatible if their corresponding major version is equal
 
 ## Lean Server
 To make an interactive webpage, the javascript Lean server is used. In this repository, javascript servers for Lean 3.4.1 and Lean 3.4.2 are provided. If you're working with a different version, you need to add the required files to `src/interactive_interface/lean_server`. You would need three files, named `lean_js_js.js`, `lean_js_wasm.js` and `lean_js_wasm.wasm`.
+You may find these files for most versions of lean in the following links:
+- [https://github.com/leanprover-community/lean/releases](https://github.com/leanprover-community/lean/releases)
+- [https://github.com/leanprover-community/lean-nightly/releases](https://github.com/leanprover-community/lean-nightly/releases)

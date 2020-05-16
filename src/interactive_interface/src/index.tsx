@@ -1361,9 +1361,10 @@ function main(){
   
             levelData.isSolved = savedLevelData.isSolved;
             let i = levelData.activeIndex;
-            if(i != -1){
+            let j = savedLevelData.activeIndex;
+            if(i != -1 && !isNaN(j) && j != -1){
               let problemData = levelData.objects[i] as ProvableObject;
-              let savedProblemData = savedLevelData.objects[i] as ProvableObject;
+              let savedProblemData = savedLevelData.objects[j] as ProvableObject;
               problemData.editorText = savedProblemData.editorText;
             }
           }

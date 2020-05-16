@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from typing import Match, List
+from typing import Match, List, ClassVar
 from dataclasses import dataclass
 from gettext import gettext, NullTranslations
 from pathlib import Path
@@ -13,17 +13,20 @@ from lean_game_maker.line_reader import LineReader, dismiss_line, FileReader
 #  Objects #
 ############
 
-class Translatable:
+class PageObject:
     def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
         pass
 
-def translate(objects: List[Translatable], translation: NullTranslations, pot: POFile, occ: str) -> None:
+    def __getstate__(self):
+        return {'type': self.type, **self.__dict__}
+
+def translate(objects: List[PageObject], translation: NullTranslations, pot: POFile, occ: str) -> None:
     for obj in objects:
         obj.translate(translation, pot, occ)
 
 @dataclass
-class Text(Translatable):
-    type: str = 'text'
+class Text(PageObject):
+    type: ClassVar[str] = 'text'
     content: str = ''
 
     def append(self, line: str) -> None:
@@ -35,7 +38,7 @@ class Text(Translatable):
 
 @dataclass
 class LeanLines(Text):
-    type: str = 'lean'
+    type: ClassVar[str] = 'lean'
     hidden: bool = False
 
     def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
@@ -50,7 +53,7 @@ class LeanLines(Text):
 
 @dataclass
 class Hint(Text):
-    type: str = 'hint'
+    type: ClassVar[str] = 'hint'
     title: str = ''
 
     def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
@@ -61,13 +64,13 @@ class Hint(Text):
 
 @dataclass
 class Tactic(Text):
-    type: str = 'tactic'
+    type: ClassVar[str] = 'tactic'
     name: str = ''
     sideBar: bool = True
 
 @dataclass
 class Axiom(Text):
-    type: str = 'axiom'
+    type: ClassVar[str] = 'axiom'
     name: str = ''
     sideBar: bool = True
 
@@ -76,11 +79,11 @@ class Axiom(Text):
 
 
 @dataclass
-class Bilingual(Translatable):
+class Bilingual(PageObject):
     """
     Base class for objects that contains both text and Lean code.
     """
-    type: str = ''
+    type: ClassVar[str] = ''
     text: str = ''
     lean: str = ''
     sideBar: bool = True
@@ -104,22 +107,22 @@ class Bilingual(Translatable):
 
 @dataclass
 class Lemma(Bilingual):
-    type: str = 'lemma'
+    type: ClassVar[str] = 'lemma'
 
 
 @dataclass
 class Theorem(Bilingual):
-    type: str = 'theorem'
+    type: ClassVar[str] = 'theorem'
 
 
 @dataclass
 class Example(Bilingual):
-    type: str = 'example'
+    type: ClassVar[str] = 'example'
 
 
 @dataclass
 class Definition(Bilingual):
-    type: str = 'definition'
+    type: ClassVar[str] = 'definition'
 
 #################
 LEVEL_NAME_RE = regex.compile(r'^\s*--\s*Level name\s*:\s*(.*)', flags=regex.IGNORECASE)
