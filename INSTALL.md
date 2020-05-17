@@ -53,7 +53,8 @@ mkvirtualenv --python=$HOME/.pyenv/versions/3.7.2/bin/python lean_env
 
 ## Install `Lean-game-maker`
 
-Install [`nodejs`](https://nodejs.org/en/download/) and clone the repository. Inside the virtual environment and in the root folder of the repository, type 
+Install [`nodejs`](https://nodejs.org/en/download/) and [`gettext`](https://www.gnu.org/software/gettext/), if it's not already installed. 
+Clone the repository. Inside the virtual environment and in the root folder of the repository, type 
 ```bash
 cd src/interactive_interface
 npm install .
