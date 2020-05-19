@@ -1286,17 +1286,8 @@ function updateURL(world: number, level: number){
   history.replaceState(null, null, u.href);
 }
 
-function resetGame(){
-  let confirmationMessage = 'The game will reset and the progress will be lost.';
-  if(window.confirm(confirmationMessage)){
-    localStorage.removeItem('savedGameData');
-    updateURL(-1, 0);
-    location.reload();
-  }
-}
 
-
-let saveGame;
+let saveGame, resetGame;
 
 function main(){
 
@@ -1328,6 +1319,22 @@ function main(){
     return [world, level];
   }
 
+  function getSavedGameLocalStorageKey(gameData: GameData): string{
+    let i = gameData.version.indexOf(".");
+    let majorVersion = (i == -1) ? gameData.version : gameData.version.slice(0,i);
+    return 'savedGameData-' + gameData.name + '-' + majorVersion;
+  }
+  
+  
+  resetGame = function(){
+    let confirmationMessage = 'The game will reset and the progress will be lost.';
+    if(window.confirm(confirmationMessage)){
+      localStorage.removeItem(getSavedGameLocalStorageKey(gameData));
+      updateURL(-1, 0);
+      location.reload();
+    }
+  }
+  
   saveGame = function(){
     let savedGameData = {name: gameData.name, version: gameData.version, data: []};
     for(let w = 0; w < gameData.worlds.length; w++){
@@ -1341,7 +1348,7 @@ function main(){
       }  
     }
 
-    localStorage.setItem('savedGameData', JSON.stringify(savedGameData));
+    localStorage.setItem(getSavedGameLocalStorageKey(gameData) , JSON.stringify(savedGameData));
   }
 
 
@@ -1350,40 +1357,34 @@ function main(){
     // This is included for backward compatibility.
     // In previous versions, the entire "gameData" was saved in the localStrorage.
     let oldStyleSavedGameData = JSON.parse(localStorage.getItem('game_data'));
-    if(oldStyleSavedGameData){
-      if(oldStyleSavedGameData.name == blankGameData.name && oldStyleSavedGameData.version == blankGameData.version){
-        for(let w = 0; w < blankGameData.worlds.length; w++){
-          let worldData = blankGameData.worlds[w];
-          let savedWorldData = oldStyleSavedGameData.worlds[w];
-          for(let l = 0; l < worldData.levels.length; l++){
-            let levelData = worldData.levels[l];
-            let savedLevelData = savedWorldData.levels[l];
-  
-            levelData.isSolved = savedLevelData.isSolved;
-            let i = levelData.problemIndex;
-            let j = savedLevelData.activeIndex;
-            if(i != -1 && !isNaN(j) && j != -1){
-              let problemData = levelData.objects[i] as ProvableObject;
-              let savedProblemData = savedLevelData.objects[j] as ProvableObject;
-              problemData.editorText = savedProblemData.editorText;
-            }
+    if(oldStyleSavedGameData && oldStyleSavedGameData.name == blankGameData.name 
+                  && oldStyleSavedGameData.version == blankGameData.version){
+      for(let w = 0; w < blankGameData.worlds.length; w++){
+        let worldData = blankGameData.worlds[w];
+        let savedWorldData = oldStyleSavedGameData.worlds[w];
+        for(let l = 0; l < worldData.levels.length; l++){
+          let levelData = worldData.levels[l];
+          let savedLevelData = savedWorldData.levels[l];
+
+          levelData.isSolved = savedLevelData.isSolved;
+          let i = levelData.problemIndex;
+          let j = savedLevelData.activeIndex;
+          if(i != -1 && !isNaN(j) && j != -1){
+            let problemData = levelData.objects[i] as ProvableObject;
+            let savedProblemData = savedLevelData.objects[j] as ProvableObject;
+            problemData.editorText = savedProblemData.editorText;
           }
-          worldData.isSolved = worldData.levels.every((levelData, l)=> levelData.isSolved );
-        } 
+        }
+        worldData.isSolved = worldData.levels.every((levelData, l)=> levelData.isSolved );
       }
       localStorage.removeItem('game_data');
       return blankGameData;  
     }
 
     
-    let savedGameData = JSON.parse(localStorage.getItem('savedGameData'));
+    let savedGameData = JSON.parse(localStorage.getItem(getSavedGameLocalStorageKey(blankGameData)));
 
-    function getMajorVersion(version: string): string{
-      let i = version.indexOf(".");
-      return (i == -1) ? version : version.slice(0,i);
-    }
-    if(!savedGameData || savedGameData.name != blankGameData.name 
-            || getMajorVersion(savedGameData.version) != getMajorVersion(blankGameData.version)){
+    if(!savedGameData){
       return blankGameData;
     }
 
