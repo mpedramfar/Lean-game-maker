@@ -16,13 +16,13 @@ import {
 } from 'react-accessible-accordion';
 
 import ForceGraph2D from 'react-force-graph-2d';
-import * as d3 from "d3";
+import * as d3 from 'd3';
 
 const seedrandom = require("seedrandom");
 
-let MathJax = require("MathJax");
+let MathJax = require('MathJax');
 
-const showdown = require("showdown");
+const showdown = require('showdown');
 let markdownConverter = new showdown.Converter({
   openLinksInNewWindow: true,
   literalMidWordUnderscores: true,
@@ -214,6 +214,7 @@ interface InfoViewState {
 class InfoView extends React.Component<InfoViewProps, InfoViewState> {
   private subscriptions: monaco.IDisposable[] = [];
   private sceduleCheckIfSolved: boolean = false;
+  private messageUpdateCounter: number = 0;
 
   constructor(props: InfoViewProps) {
     super(props);
@@ -248,6 +249,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
   }
 
   updateMessages(nextProps) {
+    this.messageUpdateCounter += 1;
     this.setState({
       messages: allMessages.filter((v) => v.file_name === this.props.file),
     });
@@ -261,8 +263,8 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
       } else {
         this.setState({ solved : false });
       }
-      this.sceduleCheckIfSolved = false;
     }
+    this.sceduleCheckIfSolved = false;
   }
 
   refreshGoal(nextProps?: InfoViewProps) {
@@ -273,10 +275,12 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
       return;
     }
 
+    const oldMessageUpdateCounter = this.messageUpdateCounter;
     const position = nextProps.cursor;
     server.info(nextProps.file, position.line, position.column).then((res) => {
       this.setState({goal: res.record && { goal: res.record, position }});
-      setTimeout(this.checkIfSolved.bind(this), 500);
+      if(this.messageUpdateCounter == oldMessageUpdateCounter)
+        this.checkIfSolved();
     });
   }
 
@@ -372,6 +376,7 @@ interface GameData {
   name: string;
   version: string;
   library_zip_fn: string;
+  devmode: boolean;
   worlds: Array<WorldData>;
   introData: LevelData;
 }
@@ -1295,7 +1300,7 @@ function updateURL(world: number, level: number){
 
 let saveGame, resetGame;
 
-function main(){
+(function(){
 
   let gameData: GameData;
 
@@ -1320,7 +1325,7 @@ function main(){
 
   function getSavedGameLocalStorageKey(gameData: GameData): string{
     let majorVersion = gameData.version.split('.')[0];
-    return 'savedGameData-' + gameData.name + '-' + majorVersion;
+    return gameData.name + '-' + majorVersion + '-savedGameData';
   }
   
   
@@ -1416,8 +1421,9 @@ function main(){
   });  
 
 
-  fetch('game_data.json', {cache: "no-cache"}).then((res)=>{
-    res.json().then((blankGameData)=>{
+  fetch('game_data.json', {cache: "no-store"})
+    .then((res)=> res.json())
+    .then((blankGameData)=>{
       gameData = loadGame(blankGameData as GameData);
       saveGame();
       document.title = gameData.name;
@@ -1427,15 +1433,17 @@ function main(){
       activeEditorData.level = wl[1];
 
 
+      const leanJsOpts: LeanJsOpts = {
+        javascript: './lean_js_js.js',
+        libraryZip: './' + gameData.library_zip_fn,
+        webassemblyJs: './lean_js_wasm.js',
+        webassemblyWasm: './lean_js_wasm.wasm',
+        dbName: gameData.library_zip_fn.slice(0, -4)
+      };
+      
       function loadLibraryAndRender(){
         // tslint:disable-next-line:no-var-requires
         (window as any).require(['vs/editor/editor.main'], () => {
-          const leanJsOpts: LeanJsOpts = {
-            javascript: './lean_js_js.js',
-            libraryZip: './' + gameData.library_zip_fn,
-            webassemblyJs: './lean_js_wasm.js',
-            webassemblyWasm: './lean_js_wasm.wasm',
-          };
           registerLeanLanguage(leanJsOpts, activeEditorData);        
           const fn = monaco.Uri.file( gameData.library_zip_fn.slice(0, -3) + 'lean').fsPath;
           render(
@@ -1446,24 +1454,13 @@ function main(){
         });
       }
 
-      let dbPromise = indexedDB.open('leanlibrary');
-      dbPromise.onsuccess = (ev)=>{
-        let db = dbPromise.result;
-        let libName = gameData.library_zip_fn.split('.')[0];
-
-        function deleteLibObjectStore(name, callback){
-          if(db.objectStoreNames.contains(name)){
-            db.transaction(name, 'readwrite').objectStore(name).delete(libName).onsuccess = callback;
-          }else{
-            callback();
-          }
-        }
-        deleteLibObjectStore('meta', deleteLibObjectStore.bind(null, 'library', loadLibraryAndRender));
+      if(gameData.devmode){
+        console.log("Game is running in development mode.")
+        indexedDB.deleteDatabase(leanJsOpts.dbName).onsuccess = loadLibraryAndRender;
+      }else{
+        loadLibraryAndRender();
       }
-      
-    })
-  })
-    
-}
 
-main();
+    })
+    
+})();

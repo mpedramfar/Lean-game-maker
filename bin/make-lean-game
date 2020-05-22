@@ -30,7 +30,7 @@ from lean_game_maker.interactive_loader import interactive_server
 module_path = Path(lean_game_maker.__file__).parent
 interactive_path = module_path.parent / 'interactive_interface'
 
-def render_lean_project(outdir=None, nolib=False, locale='en'):
+def render_lean_project(outdir=None, nolib=False, devmode=False, locale='en'):
     try:
         leanpkg_toml = toml.load('leanpkg.toml')
     except FileNotFoundError:
@@ -65,9 +65,10 @@ def render_lean_project(outdir=None, nolib=False, locale='en'):
     name = game_config.get('name', 'Lean game')
     pot.append(POEntry(msgid=name, occurrences=[('game_config', '')]))
     game_data = { 
-        'name': _(name), 
+        'name'   : _(name), 
         'version': str(game_config.get('version', '')), 
         'worlds' : [],
+        'devmode': devmode,
     }
     game_data['library_zip_fn'] = game_data['name'] + '-' + game_data['version'] + '-library.zip'
 
