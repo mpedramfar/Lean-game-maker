@@ -205,6 +205,8 @@ interface InfoViewProps {
   file: string;
   cursor?: Position;
   isSolved: () => void;
+  world: number;
+  level: number;
 }
 interface InfoViewState {
   goal?: GoalWidgetProps;
@@ -242,21 +244,34 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
     }
     this.subscriptions = [];
   }
-  componentWillReceiveProps(nextProps) {
-    if (nextProps.cursor === this.props.cursor) { return; }
+  componentWillReceiveProps(nextProps: InfoViewProps) {
+    if (this.props.world == nextProps.world && this.props.level == nextProps.level && nextProps.cursor === this.props.cursor) { return; }
     this.updateMessages(nextProps);
     this.refreshGoal(nextProps);
   }
 
-  updateMessages(nextProps) {
-    this.messageUpdateCounter += 1;
-    this.setState({
-      messages: allMessages.filter((v) => v.file_name === this.props.file),
-    });
+  updateMessages(nextProps: InfoViewProps) {
+    // comparing nextProps and this.props is not enough to see if the messages are up to date.
+    // In the constructor of the Game, we added a line "#eval ..." at the end of every page.
+    let msgs = allMessages.filter((v) => v.file_name === this.props.file);
+    let infoIndex = msgs.findIndex((m) => (m.severity == "information" 
+                        && m.caption == "eval result"
+                        && m.pos_line == activeEditorData.fileContent.split(/\r\n|\r|\n/).length
+                        && m.text == '"' + (activeEditorData.world+1) + "," + (activeEditorData.level+1) + '"'));
+    
+    if(infoIndex == -1){ // moved to a new level but the messages haven't been updated
+      this.messageUpdateCounter = 0;
+      this.setState({ messages: [] });
+    }else{
+      this.messageUpdateCounter += 1;
+      this.setState({
+        messages: msgs.filter((v, i) => (i != infoIndex))
+      });
+    }
   }
 
-  checkIfSolved(){
-    if(this.sceduleCheckIfSolved){
+  checkIfSolved(oldMessageUpdateCounter: number){
+    if(this.sceduleCheckIfSolved && oldMessageUpdateCounter == this.messageUpdateCounter && oldMessageUpdateCounter > 0){
       if( this.state.messages.filter((v) => (v.severity =='error' || v.severity == 'warning')).length == 0 ){
         this.props.isSolved();
         this.setState({ solved : true });
@@ -279,8 +294,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
     const position = nextProps.cursor;
     server.info(nextProps.file, position.line, position.column).then((res) => {
       this.setState({goal: res.record && { goal: res.record, position }});
-      if(this.messageUpdateCounter == oldMessageUpdateCounter)
-        this.checkIfSolved();
+      setTimeout(this.checkIfSolved.bind(this, oldMessageUpdateCounter), 500)
     });
   }
 
@@ -440,8 +454,7 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
       checkInputCompletionChange(e, this.editor, this.model);
     });
 
-    if(this.props.editorText != this.model.getValue())
-      this.model.setValue(this.props.editorText);
+    this.model.setValue(this.props.editorText);
   }
 
   componentDidMount() {
@@ -469,6 +482,8 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
     this.editor.addCommand(monaco.KeyCode.Tab, () => {
       tabHandler(this.editor, this.model);
     }, 'canTranslate');
+
+    node.focus();
   }
 
 
@@ -1070,8 +1085,6 @@ interface GameState {
   world: number;
   level: number;
   cursor?: Position;
-  latestProblemId?: string;
-  solvedLevels: Array<string>;
   solvedWorlds: Array<number>;
 }
 class Game extends React.Component<GameProps, GameState> {
@@ -1080,25 +1093,27 @@ class Game extends React.Component<GameProps, GameState> {
   constructor(props: GameProps) {
     super(props);
 
-    let solvedLevels = [], solvedWorlds = [];
-    for(let w = 0; w < this.props.worlds.length; w++){
-      let worldData = this.props.worlds[w];
-      for(let l = 0; l < worldData.levels.length; l++){
-        let levelData = worldData.levels[l];
-        let key = "" + w + "," + l;
-        if(levelData.isSolved)
-          solvedLevels = solvedLevels.concat([key]);
-      }
+    let solvedWorlds = [];
+    this.props.worlds.forEach((worldData, w)=>{
       if(worldData.isSolved)
         solvedWorlds = solvedWorlds.concat([w]);
-    }
+    })
     
     this.state = {
       world: this.props.world,
       level: this.props.level,
-      solvedLevels: solvedLevels,
       solvedWorlds: solvedWorlds
     };
+
+    // The following is needed to accurately say when a problem is solved. It's used in InfoView.
+    this.props.worlds.forEach((worldData, w)=>{
+      worldData.levels.forEach((levelData, l)=>{
+        if(levelData.problemIndex != -1){
+          let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
+          problemData.textAfter += '\n\n#eval "' + (w+1) + "," + (l+1) + '"'; 
+        }
+      })
+    })
 
     if(!this.graphData)
       this.graphData = getGraphData(this.props.worlds);
@@ -1177,13 +1192,13 @@ class Game extends React.Component<GameProps, GameState> {
 
     const worldData = this.props.worlds[this.state.world];
     const levelData = worldData.levels[this.state.level];
-    const key = "" + this.state.world + "," + this.state.level;
+    const problemKey = "" + (this.state.world+1) + "," + (this.state.level+1);
 
     const worldLabel = (
       <div style={{ textAlign: 'center' }}>
         <h3>
           <Text content={
-            (this.state.solvedWorlds.indexOf(this.state.world) != -1 ? "&#10004; " : "") +
+            (worldData.isSolved ? "&#10004; " : "") +
             worldData.name}/>
         </h3>
       </div>
@@ -1207,15 +1222,15 @@ class Game extends React.Component<GameProps, GameState> {
       <div style={{ textAlign: 'center' }}>
         <h4>
           <Text content={
-            (this.state.solvedLevels.indexOf(key) != -1 ? "&#10004; " : "") +
-            "Level " + (this.state.level + 1) + 
+            (levelData.isSolved ? "&#10004; " : "") +
+            "Level " + (this.state.level + 1) + "/" + worldData.levels.length + 
             (levelData.name ? " -- " + levelData.name : "")
           }/>
         </h4>
       </div>
     );
     const levelButtonsPanel = (
-      <div key={key} style={{ width: '100%', height: '2em', top: '2em', position: 'fixed' }}>
+      <div key={problemKey} style={{ width: '100%', height: '2em', top: '2em', position: 'fixed' }}>
         <button disabled={ this.state.level == 0 } 
           style={{
             float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
@@ -1231,25 +1246,22 @@ class Game extends React.Component<GameProps, GameState> {
 
     const sideBarDiv = <SideBar worlds={this.props.worlds} world={this.state.world} level={this.state.level} ></SideBar>;
 
-    const content = <Level fileName={this.props.fileName} key={key} levelData={levelData} 
-        onDidCursorMove={(c) => {this.setState({cursor: c, latestProblemId: key})}}/>;
+    const content = <Level fileName={this.props.fileName} key={problemKey} levelData={levelData} 
+        onDidCursorMove={(c) => {this.setState({cursor: c})}}/>;
 
 
     let statementIsSolved = () => {
-      if(this.state.latestProblemId != key) // another level is solved, not this one!
-        return;
-      if(this.state.solvedLevels.indexOf(key) != -1) // already solved
+      if(levelData.isSolved) // already solved
         return;
       levelData.isSolved = true;
-      let solvedLevels = this.state.solvedLevels.concat([key]);
-      worldData.isSolved = this.props.worlds[this.state.world].levels.every((levelData, l)=>{
-        return solvedLevels.indexOf("" + this.state.world + "," + l) > -1;
-      });
+      worldData.isSolved = this.props.worlds[this.state.world].levels.every((levelData)=> levelData.isSolved);
       let solvedWorlds = worldData.isSolved ? this.state.solvedWorlds.concat([this.state.world]) : this.state.solvedWorlds;
-      this.setState({solvedLevels : solvedLevels, solvedWorlds : solvedWorlds});
+      this.setState({solvedWorlds : solvedWorlds});
+      return;
     };
         
-    const infoViewDiv = <InfoView file={this.props.fileName} cursor={this.state.cursor} isSolved={statementIsSolved}/>;
+    const infoViewDiv = <InfoView file={this.props.fileName} cursor={this.state.cursor}
+                            isSolved={statementIsSolved} world={this.state.world} level={this.state.level}/>;
 
     const mainDiv = (
       <Container style={{ height: '100%' }}>
@@ -1445,7 +1457,7 @@ let saveGame, resetGame;
         // tslint:disable-next-line:no-var-requires
         (window as any).require(['vs/editor/editor.main'], () => {
           registerLeanLanguage(leanJsOpts, activeEditorData);        
-          const fn = monaco.Uri.file( gameData.library_zip_fn.slice(0, -3) + 'lean').fsPath;
+          const fn = monaco.Uri.file( gameData.library_zip_fn.slice(0, -3) + 'lean').fsPath; //TODO: no need to make this file now
           render(
               <Game fileName={fn} worlds={gameData.worlds} name={gameData.name} 
                       introData={gameData.introData} world={activeEditorData.world} level={activeEditorData.level}/>,

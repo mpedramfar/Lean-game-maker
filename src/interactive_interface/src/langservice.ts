@@ -227,6 +227,14 @@ export function registerLeanLanguage(leanJsOpts: lean.LeanJsOpts, editorData: ed
         if (msg.file_name !== fn) {
           continue;
         }
+
+        // In the constructor of the Game, we added a line "#eval ..." at the end of every page.
+        if(msg.severity == "information" && msg.caption == "eval result"
+              && msg.pos_line == editorData.fileContent.split(/\r\n|\r|\n/).length
+              && msg.text == '"' + (editorData.world+1) + "," + (editorData.level+1) + '"'){
+          continue;
+        }
+
         const marker: monaco.editor.IMarkerData = {
           severity: toSeverity(msg.severity),
           message: msg.text,
