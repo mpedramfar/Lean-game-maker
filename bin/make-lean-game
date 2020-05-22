@@ -42,25 +42,6 @@ def render_lean_project(outdir=None, nolib=False, locale='en'):
     outdir = outdir or 'html'
     Path(outdir).mkdir(exist_ok=True)
 
-    s = interactive_server(interactive_path=interactive_path,
-                    toolchain=toolchain, outdir=outdir)
-    if not s.copy_files(make_lib = not nolib):
-        return
-
-
-
-    file_reader = FileReader(default_line_handler,
-            [HiddenBegin, HiddenEnd,
-             TextBegin, TextEnd,
-             HintBegin, HintEnd,
-             TacticBegin, TacticEnd,
-             AxiomBegin, AxiomEnd,
-             ExampleBegin, ExampleEnd,
-             LemmaBegin, LemmaEnd,
-             TheoremBegin, TheoremEnd,
-             DefinitionBegin, DefinitionEnd,
-             ProofBegin, ProofEnd ])
-
 
     game_config = toml.load('game_config.toml')
     ### TODO: check for errors
@@ -83,7 +64,32 @@ def render_lean_project(outdir=None, nolib=False, locale='en'):
 
     name = game_config.get('name', 'Lean game')
     pot.append(POEntry(msgid=name, occurrences=[('game_config', '')]))
-    game_data = { 'name': _(name), 'version': str(game_config.get('version', '')), 'worlds' : [] }
+    game_data = { 
+        'name': _(name), 
+        'version': str(game_config.get('version', '')), 
+        'worlds' : [],
+    }
+    game_data['library_zip_fn'] = game_data['name'] + '-' + game_data['version'] + '-library.zip'
+
+
+    s = interactive_server(interactive_path=interactive_path,toolchain=toolchain,
+            outdir=outdir, library_zip_fn= game_data['library_zip_fn'])
+    if not s.copy_files(make_lib = not nolib):
+        return
+
+
+
+    file_reader = FileReader(default_line_handler,
+            [HiddenBegin, HiddenEnd,
+             TextBegin, TextEnd,
+             HintBegin, HintEnd,
+             TacticBegin, TacticEnd,
+             AxiomBegin, AxiomEnd,
+             ExampleBegin, ExampleEnd,
+             LemmaBegin, LemmaEnd,
+             TheoremBegin, TheoremEnd,
+             DefinitionBegin, DefinitionEnd,
+             ProofBegin, ProofEnd ])
 
     print(f"Intro page ...", end="")
     intro_file = game_config['intro']

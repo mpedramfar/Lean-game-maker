@@ -17,7 +17,6 @@ import {
 
 import ForceGraph2D from 'react-force-graph-2d';
 import * as d3 from "d3";
-import { throws } from 'assert';
 
 const seedrandom = require("seedrandom");
 
@@ -30,9 +29,15 @@ let markdownConverter = new showdown.Converter({
 });
 
 
+
+
+
+
+
+
 interface LeanStatusProps {
   file: string;
-  isReady: () => void;
+  isReady: (boolean) => void;
 }
 interface LeanStatusState {
   currentlyRunning: boolean;
@@ -63,8 +68,7 @@ class LeanStatus extends React.Component<LeanStatusProps, LeanStatusState> {
 
   updateRunning(nextProps) {
     let cr = currentlyRunning.value.indexOf(nextProps.file) !== -1;
-    if(! cr)
-      this.props.isReady();
+    this.props.isReady(! cr);
     this.setState({
       currentlyRunning: cr,
     });
@@ -272,7 +276,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
     const position = nextProps.cursor;
     server.info(nextProps.file, position.line, position.column).then((res) => {
       this.setState({goal: res.record && { goal: res.record, position }});
-      this.checkIfSolved();
+      setTimeout(this.checkIfSolved.bind(this), 500);
     });
   }
 
@@ -305,7 +309,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
       <div className='no-mathjax' style={{ 
           height: "100%", width: "100%", boxSizing: "border-box",
           padding: "1em", border: "double" }}>
-        <LeanStatus file={this.props.file} isReady={() => {this.sceduleCheckIfSolved = true;}}/>
+        <LeanStatus file={this.props.file} isReady={(val) => {this.sceduleCheckIfSolved = val;}}/>
         <Container vertical={true} style={{ height: '100%' }}>
           <Section minSize={200}>
             {goalDiv}
@@ -366,7 +370,8 @@ interface WorldData {
 
 interface GameData {
   name: string;
-  version:string;
+  version: string;
+  library_zip_fn: string;
   worlds: Array<WorldData>;
   introData: LevelData;
 }
@@ -374,6 +379,17 @@ interface GameData {
 
 
 
+
+
+
+let activeEditorData: editorTextDataInterface = { 
+  lineOffset: 0,
+  fileContent: "",
+  text: "",
+  world: -1,
+  level: 0,
+  saved: true,
+};
 
 
 
@@ -393,16 +409,6 @@ interface LeanEditorProps {
 interface LeanEditorState {
 //
 }
-
-
-let activeEditorData: editorTextDataInterface = { 
-  lineOffset: 0,
-  fileContent: "",
-  text: "",
-  world: -1,
-  level: 0,
-  saved: true,
-};
 
 class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
   model: monaco.editor.IModel;
@@ -1291,13 +1297,6 @@ let saveGame, resetGame;
 
 function main(){
 
-  const leanJsOpts: LeanJsOpts = {
-    javascript: './lean_js_js.js',
-    libraryZip: './library.zip',
-    webassemblyJs: './lean_js_wasm.js',
-    webassemblyWasm: './lean_js_wasm.wasm',
-  };
-
   let gameData: GameData;
 
 
@@ -1320,8 +1319,7 @@ function main(){
   }
 
   function getSavedGameLocalStorageKey(gameData: GameData): string{
-    let i = gameData.version.indexOf(".");
-    let majorVersion = (i == -1) ? gameData.version : gameData.version.slice(0,i);
+    let majorVersion = gameData.version.split('.')[0];
     return 'savedGameData-' + gameData.name + '-' + majorVersion;
   }
   
@@ -1343,7 +1341,7 @@ function main(){
         let levelData = worldData.levels[l];
         if(levelData.problemIndex != -1){
           let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
-          savedGameData.data.push([problemData.lean, levelData.isSolved, problemData.editorText]);
+          savedGameData.data.push({lean: problemData.lean, isSolved: levelData.isSolved, editorText: problemData.editorText});
         }
       }  
     }
@@ -1353,37 +1351,31 @@ function main(){
 
 
   function loadGame(blankGameData: GameData) : GameData{
+
+    let savedGameData = JSON.parse(localStorage.getItem(getSavedGameLocalStorageKey(blankGameData)));
+
     ///// TODO: This should be removed in a future update.
     // This is included for backward compatibility.
     // In previous versions, the entire "gameData" was saved in the localStrorage.
     let oldStyleSavedGameData = JSON.parse(localStorage.getItem('game_data'));
-    if(oldStyleSavedGameData && oldStyleSavedGameData.name == blankGameData.name 
-                  && oldStyleSavedGameData.version == blankGameData.version){
-      for(let w = 0; w < blankGameData.worlds.length; w++){
-        let worldData = blankGameData.worlds[w];
-        let savedWorldData = oldStyleSavedGameData.worlds[w];
+    if(oldStyleSavedGameData && oldStyleSavedGameData.name == blankGameData.name
+          && blankGameData.version.split('.')[0] == oldStyleSavedGameData.version.split('.')[0]){
+      savedGameData = {name: oldStyleSavedGameData.name, version: oldStyleSavedGameData.version, data: []};
+      for(let w = 0; w < oldStyleSavedGameData.worlds.length; w++){
+        let worldData = oldStyleSavedGameData.worlds[w];
         for(let l = 0; l < worldData.levels.length; l++){
           let levelData = worldData.levels[l];
-          let savedLevelData = savedWorldData.levels[l];
-
-          levelData.isSolved = savedLevelData.isSolved;
-          let i = levelData.problemIndex;
-          let j = savedLevelData.activeIndex;
-          if(i != -1 && !isNaN(j) && j != -1){
-            let problemData = levelData.objects[i] as ProvableObject;
-            let savedProblemData = savedLevelData.objects[j] as ProvableObject;
-            problemData.editorText = savedProblemData.editorText;
+          if(!isNaN(levelData.activeIndex) && levelData.activeIndex != -1){
+            let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
+            let t = problemData.editorText == "  sorry" ? "sorry" : problemData.editorText;
+            savedGameData.data.push({lean: problemData.lean, isSolved: levelData.isSolved, editorText: t});
           }
         }
-        worldData.isSolved = worldData.levels.every((levelData, l)=> levelData.isSolved );
       }
       localStorage.removeItem('game_data');
-      return blankGameData;  
     }
-
+    /////
     
-    let savedGameData = JSON.parse(localStorage.getItem(getSavedGameLocalStorageKey(blankGameData)));
-
     if(!savedGameData){
       return blankGameData;
     }
@@ -1394,12 +1386,11 @@ function main(){
         let levelData = worldData.levels[l];
         if(levelData.problemIndex != -1){
           let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
-          for(let i = 0; i < savedGameData.data.length; i++){
-            if(savedGameData.data[i][0] == problemData.lean){
-              levelData.isSolved = savedGameData.data[i][1];
-              problemData.editorText = savedGameData.data[i][2];
-            }
-          }  
+          let savedProblemData = savedGameData.data.find((d) => d.lean == problemData.lean);
+          if(savedProblemData){
+            levelData.isSolved = savedProblemData.isSolved;
+            problemData.editorText = savedProblemData.editorText;
+          }
         }
       }
       worldData.isSolved = worldData.levels.every((levelData, l)=> levelData.isSolved );
@@ -1409,52 +1400,70 @@ function main(){
   }
 
 
+  //////////////////////////////////
 
-  window.indexedDB.deleteDatabase("leanlibrary").onsuccess = function(event) {
+  seedrandom('0', { global: true }); // makes the behaviour of the graph predictable
 
-    window.addEventListener("beforeunload", function (e) {
-      if(activeEditorData.world != -1){
-        let levelData = gameData.worlds[activeEditorData.world].levels[activeEditorData.level]
-        if(levelData.problemIndex != -1){
-          let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
-          problemData.editorText = activeEditorData.text;
-          saveGame();
-        }
+  window.addEventListener("beforeunload", function (e) {
+    if(activeEditorData.world != -1){
+      let levelData = gameData.worlds[activeEditorData.world].levels[activeEditorData.level]
+      if(levelData.problemIndex != -1){
+        let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
+        problemData.editorText = activeEditorData.text;
+        saveGame();
       }
-    });  
-    
-    // tslint:disable-next-line:no-var-requires
-    (window as any).require(['vs/editor/editor.main'], () => {
+    }
+  });  
 
-      seedrandom('0', { global: true }); // makes the behaviour of the graph predictable
 
-      registerLeanLanguage(leanJsOpts, activeEditorData);
+  fetch('game_data.json', {cache: "no-cache"}).then((res)=>{
+    res.json().then((blankGameData)=>{
+      gameData = loadGame(blankGameData as GameData);
+      saveGame();
+      document.title = gameData.name;
+  
+      let wl = readURL(gameData);
+      activeEditorData.world = wl[0];
+      activeEditorData.level = wl[1];
 
-      fetch('game_data.json', {cache: "no-cache"}).then((res)=>{
-        res.json().then((blankGameData)=>{
 
-          gameData = loadGame(blankGameData as GameData);
-          saveGame();
-          document.title = gameData.name;
-      
-          let wl = readURL(gameData);
-          activeEditorData.world = wl[0];
-          activeEditorData.level = wl[1];
-          
-          const fn = monaco.Uri.file('test.lean').fsPath;
-      
+      function loadLibraryAndRender(){
+        // tslint:disable-next-line:no-var-requires
+        (window as any).require(['vs/editor/editor.main'], () => {
+          const leanJsOpts: LeanJsOpts = {
+            javascript: './lean_js_js.js',
+            libraryZip: './' + gameData.library_zip_fn,
+            webassemblyJs: './lean_js_wasm.js',
+            webassemblyWasm: './lean_js_wasm.wasm',
+          };
+          registerLeanLanguage(leanJsOpts, activeEditorData);        
+          const fn = monaco.Uri.file( gameData.library_zip_fn.slice(0, -3) + 'lean').fsPath;
           render(
               <Game fileName={fn} worlds={gameData.worlds} name={gameData.name} 
                       introData={gameData.introData} world={activeEditorData.world} level={activeEditorData.level}/>,
               document.getElementById('root'),
           );
+        });
+      }
+
+      let dbPromise = indexedDB.open('leanlibrary');
+      dbPromise.onsuccess = (ev)=>{
+        let db = dbPromise.result;
+        let libName = gameData.library_zip_fn.split('.')[0];
+
+        function deleteLibObjectStore(name, callback){
+          if(db.objectStoreNames.contains(name)){
+            db.transaction(name, 'readwrite').objectStore(name).delete(libName).onsuccess = callback;
+          }else{
+            callback();
+          }
+        }
+        deleteLibObjectStore('meta', deleteLibObjectStore.bind(null, 'library', loadLibraryAndRender));
+      }
       
-        })
-      })
+    })
+  })
     
-    });
-    
-  };
 }
 
 main();

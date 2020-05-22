@@ -6,18 +6,18 @@ from pathlib import Path
 
 
 class interactive_server:
-    def __init__(self, interactive_path, toolchain, outdir):
+    def __init__(self, interactive_path, toolchain, outdir, library_zip_fn):
         self.interactive_path = interactive_path
         self.toolchain = toolchain
         self.outdir = outdir
+        self.library_zip_fn = str( (Path(self.outdir) / library_zip_fn).resolve() )
 
 
     def make_library(self):
-        output = str(Path(self.outdir) / 'library.zip')  
+        library_zip_fn = self.library_zip_fn
         
         source_lib = "."
         source_lib_path = str(Path(source_lib).resolve()) + '/src'
-        library_zip_fn = str(Path(output).resolve())
 
         subprocess.call(['leanpkg', 'build'])
 
