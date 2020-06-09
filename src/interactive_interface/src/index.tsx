@@ -3,7 +3,7 @@ import { InfoRecord, LeanJsOpts, Message } from '@bryangingechen/lean-client-js-
 import * as React from 'react';
 import { createPortal, findDOMNode, render } from 'react-dom';
 import { allMessages, checkInputCompletionChange, checkInputCompletionPosition, currentlyRunning, delayMs,
-  registerLeanLanguage, server, tabHandler, editorTextDataInterface } from './langservice';
+  registerLeanLanguage, server, tabHandler, editorDataInterface } from './langservice';
 
 import { Container, Section, Bar } from 'react-simple-resizer';
 
@@ -207,6 +207,7 @@ interface InfoViewProps {
   isSolved: () => void;
   world: number;
   level: number;
+  isInfoMessage: (m: Message) => boolean;
 }
 interface InfoViewState {
   goal?: GoalWidgetProps;
@@ -254,10 +255,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
     // comparing nextProps and this.props is not enough to see if the messages are up to date.
     // In the constructor of the Game, we added a line "#eval ..." at the end of every page.
     let msgs = allMessages.filter((v) => v.file_name === this.props.file);
-    let infoIndex = msgs.findIndex((m) => (m.severity == "information" 
-                        && m.caption == "eval result"
-                        && m.pos_line == activeEditorData.fileContent.split(/\r\n|\r|\n/).length
-                        && m.text == '"' + (activeEditorData.world+1) + "," + (activeEditorData.level+1) + '"'));
+    let infoIndex = msgs.findIndex(this.props.isInfoMessage);
     
     if(infoIndex == -1){ // moved to a new level but the messages haven't been updated
       this.messageUpdateCounter = 0;
@@ -324,15 +322,13 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
     );
 
     return ( 
-      <div className='no-mathjax' style={{ 
-          height: "100%", width: "100%", boxSizing: "border-box",
-          padding: "1em", border: "double" }}>
+      <div className='no-mathjax info-view'>
         <LeanStatus file={this.props.file} isReady={(val) => {this.sceduleCheckIfSolved = val;}}/>
         <Container vertical={true} style={{ height: '100%' }}>
           <Section minSize={200}>
             {goalDiv}
           </Section>
-          <Bar size={10} className="Resizer horizontal" />
+          <Bar size={10} className='Resizer horizontal'/>
           <Section minSize={200}>
             {msgsDiv}
           </Section>
@@ -401,20 +397,6 @@ interface GameData {
 
 
 
-let activeEditorData: editorTextDataInterface = { 
-  lineOffset: 0,
-  fileContent: "",
-  text: "",
-  world: -1,
-  level: 0,
-  saved: true,
-};
-
-
-
-
-
-
 interface LeanEditorProps {
   fileName: string;
   editorText: string;
@@ -423,7 +405,8 @@ interface LeanEditorProps {
   textAfter: string;
   readonly: boolean;
   height: number;
-  onDidCursorMove: (Position) => void;
+  onDidCursorMove: (p: Position) => void;
+  updateEditorData: (data: Partial<editorDataInterface>) => void;
 }
 interface LeanEditorState {
 //
@@ -439,7 +422,7 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
       status: null,
     };
 
-    activeEditorData.lineOffset = this.props.lineOffset;
+    this.props.updateEditorData({lineOffset: this.props.lineOffset});
 
     this.model = monaco.editor.getModel(monaco.Uri.file(this.props.fileName));
     if(! this.model){
@@ -448,9 +431,10 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
     }
 
     this.model.onDidChangeContent((e) => {
-      activeEditorData.text = this.model.getValue();
-      activeEditorData.fileContent = this.props.textBefore + this.model.getValue() + this.props.textAfter;
-      activeEditorData.saved = false;
+      this.props.updateEditorData({
+        fileContent: this.props.textBefore + this.model.getValue() + this.props.textAfter,
+        text: this.model.getValue(),
+      });
       checkInputCompletionChange(e, this.editor, this.model);
     });
 
@@ -463,7 +447,6 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
       selectOnLineNumbers: true,
       roundedSelection: false,
       readOnly: this.props.readonly,
-      theme: 'vs',
       cursorStyle: 'line',
       automaticLayout: true,
       cursorBlinking: 'solid',
@@ -477,7 +460,7 @@ class LeanEditor extends React.Component<LeanEditorProps, LeanEditorState> {
     const canTranslate = this.editor.createContextKey('canTranslate', false);
     this.editor.onDidChangeCursorPosition((e) => {
       canTranslate.set(checkInputCompletionPosition(e, this.editor, this.model));
-      this.props.onDidCursorMove({line: e.position.lineNumber + activeEditorData.lineOffset, column: e.position.column - 1});
+      this.props.onDidCursorMove({line: e.position.lineNumber + this.props.lineOffset, column: e.position.column - 1});
     });
     this.editor.addCommand(monaco.KeyCode.Tab, () => {
       tabHandler(this.editor, this.model);
@@ -568,6 +551,8 @@ interface ProvableProps extends ProvableObject {
   fileName: string;
   isActive: boolean;
   onDidCursorMove: (Position) => void;
+  updateEditorData: (data: Partial<editorDataInterface>) => void;
+  getCurrentEditorText: () => string;
 }
 class Provable extends React.Component<ProvableProps, {}> {
 
@@ -576,12 +561,11 @@ class Provable extends React.Component<ProvableProps, {}> {
   }
 
   render() {
-
     let proof, copyButton;
     if( this.props.isActive ){
       proof = <LeanEditor {...this.props} readonly={this.props.type=="example"} />;
       copyButton = <button style={{ border: "none", background: "transparent" }} onClick={()=>{
-        navigator.clipboard.writeText(this.props.lean + "begin\n" + activeEditorData.text + "\nend");
+        navigator.clipboard.writeText(this.props.lean + "begin\n" + this.props.getCurrentEditorText() + "\nend");
       }} title="Copy to clipboard" >&#x1f4cb;</button>;
     } else {
       proof = <LeanColorize text={this.props.editorText}/>;
@@ -591,13 +575,13 @@ class Provable extends React.Component<ProvableProps, {}> {
         ((this.props.type == "theorem") ? "Theorem" :
         ((this.props.type == "definition") ? "Definition" : "Example"));
 
-    return <div className="lemma_wrapper">
-        <span className="lemma_label" >{title}</span>
-        <div className="lemma_content">
-	        <div className="lemma_text">
+    return <div className="problem_wrapper">
+        <span className="problem_label" >{title}</span>
+        <div className="problem_content">
+	        <div className="problem_text">
 	          { this.props.text }
     	    </div>
-      	  <div className="lemma_lean">
+      	  <div className="problem_lean">
 	          <LeanColorize text={this.props.lean} />
     	    </div>
         </div>
@@ -606,7 +590,7 @@ class Provable extends React.Component<ProvableProps, {}> {
           <span style={{ fontStyle:"italic" }}>Proof :</span>
         </div>
         }
-        <div className="lemma_proof" >
+        <div className="problem_proof" >
           <div style={{ display: "flex", justifyContent: "space-between", width: "calc(100% - 2em)"}}>
             <LeanColorize text="begin"/>
             {copyButton}
@@ -625,6 +609,8 @@ interface LevelProps {
   fileName: string;
   levelData: LevelData;
   onDidCursorMove: (Position) => void;
+  updateEditorData: (data: Partial<editorDataInterface>) => void;
+  getCurrentEditorText: () => string;
 }
 interface LevelState {
   //
@@ -665,18 +651,14 @@ class Level extends React.Component<LevelProps, LevelState> {
                       fileName={this.props.fileName}
                       isActive={this.props.levelData.problemIndex == i} 
                       onDidCursorMove={this.props.onDidCursorMove}
+                      updateEditorData={this.props.updateEditorData}
+                      getCurrentEditorText={this.props.getCurrentEditorText}
                       {...itemData}
                       />;
       };
     });
 
-    return <div style={{
-      width: '100%',
-      height: '100%',
-      boxSizing: 'border-box',
-      padding: '1em',
-      borderStyle: 'double',
-      overflowY: 'auto'}}>{content}</div>;
+    return <div className="level_content">{content}</div>;
   }
 }
 
@@ -958,6 +940,7 @@ interface GraphProps {
   width: number;
   height: number;
   gotoWorld: (w) => void;
+  darkMode: boolean;
 }
 
 interface GraphState{
@@ -1014,11 +997,11 @@ class Graph extends React.Component<GraphProps, GraphState> {
     ctx.font = `${scaledFontSize}px Sans-Serif`;
     const textWidth = ctx.measureText(label).width;
     const bckgDimensions = [textWidth, scaledFontSize].map(n => n + scaledFontSize * 0.2); // some padding
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillStyle = getComputedStyle(document.body).backgroundColor;
     ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] - node_R * 1.5, ...bckgDimensions);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'black';
+    ctx.fillStyle = getComputedStyle(document.body).color;
     ctx.fillText(label, node.x, node.y - bckgDimensions[1]/2 - node_R * 1.5);
   };
 
@@ -1053,8 +1036,10 @@ class Graph extends React.Component<GraphProps, GraphState> {
       graphData={this.props.graphData}
       nodeRelSize={node_R}
       linkWidth={5}
+      linkColor={this.props.darkMode ? () => 'rgb(100, 100, 100)' : 'color'}
       linkDirectionalParticles={0}
       linkDirectionalArrowLength={10}
+      linkDirectionalArrowColor={this.props.darkMode ? () => getComputedStyle(document.body).color : 'color'}
       nodeCanvasObject={(node, ctx, globalScale) => {this.paintNode.call(this, node, ctx, globalScale, node_R, fontSize)}}
       onNodeHover={this.handleNodeHover.bind(this)}
       onNodeClick={(node) => {this.props.gotoWorld(node.id)}}
@@ -1080,15 +1065,24 @@ interface GameProps {
   name: string;
   world: number;
   level: number;
+  saveGame: ()=>void;
+  resetGame: ()=>void;
+  updateURL: (world: number, level: number)=>void;
+  updateEditorData: (data: Partial<editorDataInterface>) => void;
+  isInfoMessage: (m: Message) => boolean;
+  getCurrentEditorText: () => string;
+  darkMode: boolean;
+  updateDarkMode: (mode: boolean) => void;
 }
 interface GameState {
   world: number;
   level: number;
   cursor?: Position;
   solvedWorlds: Array<number>;
+  darkMode: boolean;
 }
 class Game extends React.Component<GameProps, GameState> {
-  graphData : any;
+  graphData: any;
 
   constructor(props: GameProps) {
     super(props);
@@ -1102,39 +1096,22 @@ class Game extends React.Component<GameProps, GameState> {
     this.state = {
       world: this.props.world,
       level: this.props.level,
-      solvedWorlds: solvedWorlds
+      solvedWorlds: solvedWorlds,
+      darkMode: this.props.darkMode
     };
-
-    // The following is needed to accurately say when a problem is solved. It's used in InfoView.
-    this.props.worlds.forEach((worldData, w)=>{
-      worldData.levels.forEach((levelData, l)=>{
-        if(levelData.problemIndex != -1){
-          let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
-          problemData.textAfter += '\n\n#eval "' + (w+1) + "," + (l+1) + '"'; 
-        }
-      })
-    })
 
     if(!this.graphData)
       this.graphData = getGraphData(this.props.worlds);
   }
 
   goto(world: number, level: number){
-    if(this.state.world != -1){
-      let levelData = this.props.worlds[this.state.world].levels[this.state.level]
-      if(levelData.problemIndex != -1){
-        let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
-        problemData.editorText = activeEditorData.text;
-        saveGame();
-        activeEditorData.saved = true;
-      }
-    }
+    this.props.saveGame();
     
     this.setState({ world: world, level: level });
     if(world != -1)
       this.props.worlds[world].lastVisitedLevel = level;
 
-    updateURL(world, level);
+    this.props.updateURL(world, level);
   }
 
   gotoWorld(w: number){
@@ -1162,14 +1139,38 @@ class Game extends React.Component<GameProps, GameState> {
   }
 
   render() {
+    
+
+    const resetButton = <button className='ridge-button'
+      style={{ float: 'right', width: '10%', height:'100%', fontSize: 'x-large' }}
+      onClick={this.props.resetGame} title={"Reset game"}
+      dangerouslySetInnerHTML={{__html: "&#8634;"}}></button>;
+    
+    const brighnessButton = <button className='ridge-button'
+      style={{ float: 'right', width: '10%', height:'100%', fontSize: 'x-large' }}
+      onClick={() => {
+        this.props.updateDarkMode(!this.state.darkMode);
+        this.setState({darkMode: !this.state.darkMode});
+      }} title={this.state.darkMode ? "Day mode" : "Night mode"} 
+      dangerouslySetInnerHTML={{__html: this.state.darkMode ? "&#x1f506;" : "&#x1f505;"}}></button>;
+
+
     if(this.state.world == -1){
 
+      const buttonsPanel = (
+        <div className="first-button-panel">
+          {resetButton}
+          {brighnessButton}
+        </div>
+      );  
+
       const content = <Level fileName={this.props.fileName} key={"intro"} levelData={this.props.introData} 
-          onDidCursorMove={(c) => {}}/>;
+          onDidCursorMove={(c) => {}} updateEditorData={this.props.updateEditorData} 
+          getCurrentEditorText={this.props.getCurrentEditorText} />;
 
       const graphDiv = <Graph graphData={this.graphData} worlds={this.props.worlds} world={this.state.world} 
                             solvedWorlds={this.state.solvedWorlds} gotoWorld={this.gotoWorld.bind(this)} 
-                            width={window.innerWidth*0.4} height={window.innerHeight}/>;
+                            width={window.innerWidth*0.4} height={window.innerHeight} darkMode={this.state.darkMode}/>;
 
       return (
         <div style={{ position: 'fixed', top: '0', bottom: '0', left: '0', right: '0'}}>
@@ -1185,7 +1186,8 @@ class Game extends React.Component<GameProps, GameState> {
                 {graphDiv}
             </div>
           </Section>
-        </Container>
+          </Container>
+          {buttonsPanel}
         </div>
       );
     }
@@ -1204,15 +1206,11 @@ class Game extends React.Component<GameProps, GameState> {
       </div>
     );
     const worldButtonsPanel = (
-      <div>
-        <div key={this.state.world} style={{ width: '100%', height: '2em', top: '0em', position: 'fixed' }}>
-          <button style={{ 
-              float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
-            }} onClick= {() => { this.gotoWorld.call(this, -1); }}> Main Menu </button>
-          <button style={{ 
-              float: 'right', borderStyle: 'ridge', width: '20%', height:'100%'
-            }} onClick={() => { resetGame(); }}> Reset </button>
-        </div>
+      <div key={this.state.world} className="first-button-panel">
+        <button className='ridge-button' style={{ float: 'left', width: '20%', height:'100%' }}
+          onClick= {() => { this.gotoWorld.call(this, -1); }}> Main Menu </button>
+        {resetButton}
+        {brighnessButton}
         {worldLabel}
       </div>
     );
@@ -1230,15 +1228,13 @@ class Game extends React.Component<GameProps, GameState> {
       </div>
     );
     const levelButtonsPanel = (
-      <div key={problemKey} style={{ width: '100%', height: '2em', top: '2em', position: 'fixed' }}>
-        <button disabled={ this.state.level == 0 } 
-          style={{
-            float: 'left', borderStyle: 'ridge', width: '20%', height:'100%'
-          }} onClick={() => { this.gotoLevel.call(this, this.state.level - 1); }}> Previous Level </button>
-        <button disabled={ this.state.level == worldData.levels.length - 1 } 
-          style={{ 
-            float: 'right', borderStyle: 'ridge', width: '20%', height: '100%' 
-          }} onClick={() => { this.gotoLevel.call(this, this.state.level + 1); }}> Next Level </button>
+      <div key={problemKey} className="second-button-panel">
+        <button className='ridge-button' disabled={ this.state.level == 0 } 
+          style={{ float: 'left', width: '20%', height:'100%' }}
+          onClick={() => { this.gotoLevel.call(this, this.state.level - 1); }}> Previous Level </button>
+        <button className='ridge-button' disabled={ this.state.level == worldData.levels.length - 1 } 
+          style={{ float: 'right', width: '20%', height: '100%' }}
+          onClick={() => { this.gotoLevel.call(this, this.state.level + 1); }}> Next Level </button>
         {levelLabel}
       </div>
     );
@@ -1247,7 +1243,8 @@ class Game extends React.Component<GameProps, GameState> {
     const sideBarDiv = <SideBar worlds={this.props.worlds} world={this.state.world} level={this.state.level} ></SideBar>;
 
     const content = <Level fileName={this.props.fileName} key={problemKey} levelData={levelData} 
-        onDidCursorMove={(c) => {this.setState({cursor: c})}}/>;
+      onDidCursorMove={(c) => {this.setState({cursor: c})}} updateEditorData={this.props.updateEditorData} 
+      getCurrentEditorText={this.props.getCurrentEditorText} />;
 
 
     let statementIsSolved = () => {
@@ -1261,18 +1258,19 @@ class Game extends React.Component<GameProps, GameState> {
     };
         
     const infoViewDiv = <InfoView file={this.props.fileName} cursor={this.state.cursor}
-                            isSolved={statementIsSolved} world={this.state.world} level={this.state.level}/>;
+                            world={this.state.world} level={this.state.level} isSolved={statementIsSolved}
+                            isInfoMessage={this.props.isInfoMessage} />;
 
     const mainDiv = (
       <Container style={{ height: '100%' }}>
         <Section defaultSize={window.innerWidth*0.15}>
           {sideBarDiv}
         </Section>
-        <Bar size={10} className="Resizer vertical" />
+        <Bar size={10} className='Resizer vertical' />
         <Section minSize={200} defaultSize={window.innerWidth*0.5}>
           {content}
         </Section>
-        <Bar size={10} className="Resizer vertical" />
+        <Bar size={10} className='Resizer vertical' />
         <Section minSize={200}>
           {infoViewDiv}
         </Section>
@@ -1283,7 +1281,7 @@ class Game extends React.Component<GameProps, GameState> {
       <div>
         {worldButtonsPanel}
         {levelButtonsPanel}
-        <div style={{ position: 'fixed', top: '5em', bottom: '1em', left: '1em', right: '1em'}} > 
+        <div className="main-wrapper"> 
           {mainDiv}
         </div>
       </div>
@@ -1294,66 +1292,114 @@ class Game extends React.Component<GameProps, GameState> {
 
 
 
-//////////////////////////////////////////////////////////////////////////
+// -----------------------------------
 
-function updateURL(world: number, level: number){
-  let u = new URL(window.location.href);
-  if(world == -1){
-    u.search = "";
-  }else{
-    u.searchParams.set('world', String(world + 1));
-    u.searchParams.set('level', String(level + 1));
+class PageManager {
+
+  static gameData: GameData;
+  static world: number;
+  static level: number;
+  static isSaved: boolean;
+  static savedGameLocalStorageKey: string;
+
+  static darkMode: boolean;
+
+  static activeEditorData: editorDataInterface = { 
+    lineOffset: 0,
+    fileContent: "",
+    text: "",
+  };
+    
+  static updateEditorData(data: Partial<editorDataInterface>){
+    if(data.lineOffset)
+      this.activeEditorData.lineOffset = data.lineOffset;
+    if(data.fileContent){
+      this.activeEditorData.fileContent = data.fileContent;
+      this.activeEditorData.text = data.text;
+      this.isSaved = false;
+    }
   }
-  activeEditorData.world = world;
-  activeEditorData.level = level;
-  history.replaceState(null, null, u.href);
-}
 
+  static updateURL(world: number, level: number){
+    let u = new URL(window.location.href);
+    if(world == -1){
+      u.search = "";
+    }else{
+      u.searchParams.set('world', String(world + 1));
+      u.searchParams.set('level', String(level + 1));
+    }
+    this.world = world;
+    this.level = level;
+    history.replaceState(null, null, u.href);
+  }
+  
 
-let saveGame, resetGame;
-
-(function(){
-
-  let gameData: GameData;
-
-
-  function readURL(gameData: GameData){
+  static readURL(){
     let world = -1, level = 0;
 
     let u = new URL(window.location.href);
-    if(u.searchParams.has('world') && u.searchParams.has('level')){
+    if(u.searchParams.has('world')){
       let w = Number(u.searchParams.get('world'));
-      let l = Number(u.searchParams.get('level'));
-      if(!isNaN(w) && !isNaN(l)){
-        if(w >= 1 && w <= gameData.worlds.length && l >= 1 && l <= gameData.worlds[w-1].levels.length){
-          world = w - 1;
-          level = l - 1;
+      if(!isNaN(w) && w >= 1 && w <= this.gameData.worlds.length){
+        world = w - 1;
+        if(u.searchParams.has('level')){
+          let l = Number(u.searchParams.get('level'));
+          if(!isNaN(l) && l >= 1 && l <= this.gameData.worlds[w-1].levels.length){
+            level = l - 1;
+          }
         }
       }
     }
-    updateURL(world, level);
-    return [world, level];
+    this.updateURL(world, level);
   }
 
-  function getSavedGameLocalStorageKey(gameData: GameData): string{
-    let majorVersion = gameData.version.split('.')[0];
-    return gameData.name + '-' + majorVersion + '-savedGameData';
-  }
   
-  
-  resetGame = function(){
+  static resetGame(){
     let confirmationMessage = 'The game will reset and the progress will be lost.';
     if(window.confirm(confirmationMessage)){
-      localStorage.removeItem(getSavedGameLocalStorageKey(gameData));
-      updateURL(-1, 0);
+      localStorage.removeItem(this.savedGameLocalStorageKey);
+      this.isSaved = true;
+      this.updateURL(-1, 0);
       location.reload();
     }
   }
+
+  static updateDarkMode(mode: boolean){
+    this.darkMode = mode;
+    let root = document.documentElement;
+    if(this.darkMode){
+      root.style.setProperty('--bg-color', 'var(--dark-mode-bg-color)');
+      root.style.setProperty('--color', 'var(--dark-mode-color)');
+      root.style.setProperty('--resizer-bg-color', 'var(--dark-mode-resizer-bg-color)');
+      root.style.setProperty('--a-color', 'var(--dark-mode-a-color)');
+
+      monaco.editor.setTheme('vs-dark');
+    } else {
+      root.style.removeProperty('--bg-color');
+      root.style.removeProperty('--color');
+      root.style.removeProperty('--resizer-bg-color');
+      root.style.removeProperty('--a-color');
+
+      monaco.editor.setTheme('vs');
+    }    
+    localStorage.setItem('darkMode', JSON.stringify(this.darkMode));
+  }
   
-  saveGame = function(){
-    let savedGameData = {name: gameData.name, version: gameData.version, data: []};
-    for(let w = 0; w < gameData.worlds.length; w++){
-      let worldData = gameData.worlds[w];
+  static saveGame(){
+    if(this.isSaved)
+      return
+    
+    if(this.world != -1){
+      let levelData = this.gameData.worlds[this.world].levels[this.level]
+      if(levelData.problemIndex != -1){
+        let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
+        problemData.editorText = this.activeEditorData.text;
+      }
+    }
+
+    let savedGameData = {name: this.gameData.name, version: this.gameData.version, data: []};
+    for(let w = 0; w < this.gameData.worlds.length; w++){
+      let worldData = this.gameData.worlds[w];
       for(let l = 0; l < worldData.levels.length; l++){
         let levelData = worldData.levels[l];
         if(levelData.problemIndex != -1){
@@ -1363,15 +1409,18 @@ let saveGame, resetGame;
       }  
     }
 
-    localStorage.setItem(getSavedGameLocalStorageKey(gameData) , JSON.stringify(savedGameData));
+    localStorage.setItem(this.savedGameLocalStorageKey, JSON.stringify(savedGameData));
+    this.isSaved = true;
   }
 
 
-  function loadGame(blankGameData: GameData) : GameData{
+  static loadGame(blankGameData: GameData){
 
-    let savedGameData = JSON.parse(localStorage.getItem(getSavedGameLocalStorageKey(blankGameData)));
+    this.savedGameLocalStorageKey = blankGameData.name + '-' + blankGameData.version.split('.')[0] + '-savedGameData';
 
-    ///// TODO: This should be removed in a future update.
+    let savedGameData = JSON.parse(localStorage.getItem(this.savedGameLocalStorageKey));
+
+    //--- TODO: This should be removed in a future update.
     // This is included for backward compatibility.
     // In previous versions, the entire "gameData" was saved in the localStrorage.
     let oldStyleSavedGameData = JSON.parse(localStorage.getItem('game_data'));
@@ -1391,88 +1440,106 @@ let saveGame, resetGame;
       }
       localStorage.removeItem('game_data');
     }
-    /////
+    //---
     
-    if(!savedGameData){
-      return blankGameData;
-    }
-
-    for(let w = 0; w < blankGameData.worlds.length; w++){
-      let worldData = blankGameData.worlds[w];
-      for(let l = 0; l < worldData.levels.length; l++){
-        let levelData = worldData.levels[l];
-        if(levelData.problemIndex != -1){
-          let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
-          let savedProblemData = savedGameData.data.find((d) => d.lean == problemData.lean);
-          if(savedProblemData){
-            levelData.isSolved = savedProblemData.isSolved;
-            problemData.editorText = savedProblemData.editorText;
+    if(savedGameData){
+      for(let w = 0; w < blankGameData.worlds.length; w++){
+        let worldData = blankGameData.worlds[w];
+        for(let l = 0; l < worldData.levels.length; l++){
+          let levelData = worldData.levels[l];
+          if(levelData.problemIndex != -1){
+            let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
+            let savedProblemData = savedGameData.data.find((d) => d.lean == problemData.lean);
+            if(savedProblemData){
+              levelData.isSolved = savedProblemData.isSolved;
+              problemData.editorText = savedProblemData.editorText;
+            }
           }
         }
+        worldData.isSolved = worldData.levels.every((levelData)=> levelData.isSolved );
       }
-      worldData.isSolved = worldData.levels.every((levelData, l)=> levelData.isSolved );
     }
-    return blankGameData;
 
+
+    this.gameData = blankGameData;
+    this.readURL();
+    this.updateDarkMode(Boolean(JSON.parse(localStorage.getItem('darkMode'))));
   }
 
 
-  //////////////////////////////////
+  static run(){
 
-  seedrandom('0', { global: true }); // makes the behaviour of the graph predictable
+    seedrandom('0', { global: true }); // makes the behaviour of the graph predictable
 
-  window.addEventListener("beforeunload", function (e) {
-    if(activeEditorData.world != -1){
-      let levelData = gameData.worlds[activeEditorData.world].levels[activeEditorData.level]
-      if(levelData.problemIndex != -1){
-        let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
-        problemData.editorText = activeEditorData.text;
-        saveGame();
-      }
-    }
-  });  
-
-
-  fetch('game_data.json', {cache: "no-store"})
-    .then((res)=> res.json())
-    .then((blankGameData)=>{
-      gameData = loadGame(blankGameData as GameData);
-      saveGame();
-      document.title = gameData.name;
+    window.addEventListener("beforeunload", this.saveGame.bind(this));
   
-      let wl = readURL(gameData);
-      activeEditorData.world = wl[0];
-      activeEditorData.level = wl[1];
+    fetch('game_data.json', {cache: "no-store"})
+      .then((res)=> res.json())
+      .then((blankGameData)=>{
+
+        this.loadGame(blankGameData as GameData);
+
+        document.title = this.gameData.name;
+  
+        // The following is used in InfoView to accurately say when a problem is solved.
+        this.gameData.worlds.forEach((worldData, w)=>{
+          worldData.levels.forEach((levelData, l)=>{
+            if(levelData.problemIndex != -1){
+              let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
+              problemData.textAfter += '\n\n#eval "' + (w+1) + "," + (l+1) + '"'; 
+            }
+          })
+        })
+        let isInfoMessage = (m: Message) => 
+          (m.severity == "information" 
+          && m.caption == "eval result"
+          && m.pos_line == this.activeEditorData.fileContent.split(/\r\n|\r|\n/).length
+          && m.text == '"' + (this.world+1) + "," + (this.level+1) + '"');      
+  
+  
+  
+
+        let dbName = this.gameData.library_zip_fn.slice(0, -4);
+        
+        let loadLibraryAndRender = () => {
+          // tslint:disable-next-line:no-var-requires
+          (window as any).require(['vs/editor/editor.main'], () => {
+  
+            const leanJsOpts: LeanJsOpts = {
+              javascript: './lean_js_js.js',
+              libraryZip: './' + this.gameData.library_zip_fn,
+              webassemblyJs: './lean_js_wasm.js',
+              webassemblyWasm: './lean_js_wasm.wasm',
+              dbName: dbName
+            };
+            
+            registerLeanLanguage(leanJsOpts, this.activeEditorData, isInfoMessage);
+  
+            const fn = monaco.Uri.file( this.gameData.library_zip_fn.slice(0, -3) + 'lean').fsPath;
+
+            render(
+                <Game fileName={fn} worlds={this.gameData.worlds} name={this.gameData.name} 
+                        introData={this.gameData.introData} world={this.world} level={this.level}
+                        saveGame={this.saveGame.bind(this)} resetGame={this.resetGame.bind(this)}
+                        updateURL={this.updateURL.bind(this)} updateEditorData={this.updateEditorData.bind(this)}
+                        isInfoMessage={isInfoMessage} getCurrentEditorText={() => this.activeEditorData.text}
+                        darkMode={this.darkMode} updateDarkMode={this.updateDarkMode.bind(this)}/>,
+                document.getElementById('root'),
+            );
+          });
+        }
+  
+        if(this.gameData.devmode){
+          console.log("Game is running in development mode.")
+          indexedDB.deleteDatabase(dbName).onsuccess = loadLibraryAndRender;
+        }else{
+          loadLibraryAndRender();
+        }
+  
+      })      
+  }
+   
+}
 
 
-      const leanJsOpts: LeanJsOpts = {
-        javascript: './lean_js_js.js',
-        libraryZip: './' + gameData.library_zip_fn,
-        webassemblyJs: './lean_js_wasm.js',
-        webassemblyWasm: './lean_js_wasm.wasm',
-        dbName: gameData.library_zip_fn.slice(0, -4)
-      };
-      
-      function loadLibraryAndRender(){
-        // tslint:disable-next-line:no-var-requires
-        (window as any).require(['vs/editor/editor.main'], () => {
-          registerLeanLanguage(leanJsOpts, activeEditorData);        
-          const fn = monaco.Uri.file( gameData.library_zip_fn.slice(0, -3) + 'lean').fsPath; //TODO: no need to make this file now
-          render(
-              <Game fileName={fn} worlds={gameData.worlds} name={gameData.name} 
-                      introData={gameData.introData} world={activeEditorData.world} level={activeEditorData.level}/>,
-              document.getElementById('root'),
-          );
-        });
-      }
-
-      if(gameData.devmode){
-        console.log("Game is running in development mode.")
-        indexedDB.deleteDatabase(leanJsOpts.dbName).onsuccess = loadLibraryAndRender;
-      }else{
-        loadLibraryAndRender();
-      }
-
-    })
-    
-})();
+PageManager.run();

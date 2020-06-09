@@ -1,6 +1,30 @@
-body {
-    margin: 0;
+html {
+  position: relative;
 }
+
+/* brightness */
+:root {
+  --dark-mode-bg-color: #202020 !important;
+  --dark-mode-color: #cdcdcd;
+  --dark-mode-resizer-bg-color: #535353 !important;
+  --dark-mode-a-color: rgb(79, 140, 201);
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-color, initial);
+  color: var(--color, initial);
+}
+
+.ridge-button {
+  border-style: ridge;
+  background-color: var(--bg-color, initial);
+  color: var(--color, initial);
+}
+
+a {
+  color: var(--a-color, blue);
+} 
 
 .code-block {
     display: block;
@@ -11,318 +35,124 @@ body {
     font-size: 110%;
 }
 
+div.first-button-panel {
+  width: 100%;
+  height: 2em;
+  top: 0em;
+  position: fixed;
+}
+
+div.second-button-panel {
+  width: 100%;
+  height: 2em;
+  top: 2em;
+  position: fixed;
+}
+
+div.main-wrapper {
+  position: fixed;
+  top: 5em;
+  bottom: 1em;
+  left: 1em;
+  right: 1em;
+}
+
+/* Level */
+
+div.level_content {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 1em;
+  border-style: double;
+  overflow-y: auto;
+}
+
+p {
+  line-height: 1.5rem;
+}
+
+
+div.problem_wrapper {
+  margin-top: 1rem;
+}
+
+span.problem_label {
+  font-weight: bold;
+}
+
+div.problem_content {
+  margin-left: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 0.15rem solid black;
+}
+
+div.problem_proof {
+  margin-left: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 0.15rem solid black;
+}
+
+/* TODO : change div.problem_lean ! */
+div.problem_lean {
+  display: block; 
+}
+
+
+
+
+/* info view */
+
+div.info-view {
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1em;
+  border: double;
+}
+
 .info-header {
-    border-bottom: 1px solid;
-    font-weight: bold;
-    font-family: sans-serif;
+  border-bottom: 1px solid;
+  font-weight: bold;
+  font-family: sans-serif;
 }
 
-.running {
-    display: none;
-}
-
-.leanlink {
-    font-size: 80%;
-}
-
-
-
-.u-hide-visually {
-    border: 0 !important;
-    clip: rect(0 0 0 0) !important;
-    height: 1px !important;
-    margin: -1px !important;
-    overflow: hidden !important;
-    padding: 0 !important;
-    position: absolute !important;
-    width: 1px !important;
-    white-space: nowrap !important;
-}
-
-.leaneditorContainer {
-    height: 99vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.leanheader {
-    display: flex;
-}
-
-.headerContainer {
-    overflow: hidden;
-}
-
-.headerForms {
-    padding: 1em 1em 0.25em 1em;
-    flex-grow: 1;
-}
-
-.urlForm {
-    display: flex;
-}
-
-.urlForm form {
-    display: flex;
-    justify-content: flex-end;
-    flex: 1;
-}
-
-.urlForm input[type='text'] {
-    flex: 1;
-}
-
-.editorContainer {
-    flex: 1;
-    position: relative;
-    border-top: 1.5px dotted rgb(93, 101, 116);
-}
-
-.monacoContainer {
-    height: 98%;
-    width: 100%;
-    margin: 1ex 0em 1ex -1.5ex;
-    padding-right: 10px;
-    overflow: hidden;
-}
-
-.infoContainer {
-    margin: 1ex;
-}
+/* .running {
+  display: none;
+}*/
 
 .toggleDoc {
-    margin-top: 1em;
-    cursor: pointer;
-    white-space: pre-wrap;
+  margin-top: 1em;
+  cursor: pointer;
+  white-space: pre-wrap;
 }
 
-/* https://alligator.io/css/collapsible/ */
-.wrap-collabsible {
-    margin-bottom: 1.2rem 0;
-}
 
-input[type='checkbox']#collapsible  {
-    display: none;
-}
 
-.lbl-toggle {
-    display: block;
-    text-align: center;
-    color: #222;
-    cursor: pointer;
-    transition: all 0.25s ease-out;
-}
 
-.lbl-toggle:hover {
-    color: #44a;
-}
-
-.lbl-toggle::before {
-    content: ' ';
-    display: inline-block;
-
-    border-top: 5px solid transparent;
-    border-bottom: 5px solid transparent;
-    border-left: 5px solid currentColor;
-    vertical-align: middle;
-    margin-right: .7rem;
-    transform: translateY(-2px);
-
-    transition: transform .2s ease-out;
-}
-
-.toggle:checked + .lbl-toggle::before {
-    transform: rotate(90deg) translateX(-3px);
-}
-
-.collapsible-content {
-    max-height: 0px;
-    overflow: hidden;
-    transition: max-height .25s ease-in-out;
-}
-
-.toggle:checked  + .lbl-toggle + .collapsible-content {
-    max-height: 10em;
-}
-
-.toggle:checked + .lbl-toggle {
-    border-bottom-right-radius: 0;
-    border-bottom-left-radius: 0;
-}
-
-@media screen and (max-width: 800px) {
-    .logo {
-        display: none;
-    }
-    .running {
-        display: inline;
-    }
-    .leanheader {
-        font-size: 80%;
-    }
-    .leanlink {
-        font-size: 110%;
-    }
-}
-
-@media screen and (max-width: 450px) {
-    .url {
-        display: none;
-    }
-}
+/* Resizer */
 
 .Resizer {
-    z-index: 1;
-    background-color: #ccc;
+  z-index: 1;
+  background-color: var(--resizer-bg-color, #ccc);
 }
 
 .Resizer:hover {
-    background-color: #999;
+  background-color: var(--resizer-bg-color, #999);
 }
 
 .Resizer.horizontal {
-    cursor: row-resize;
+  cursor: row-resize;
 }
 
 .Resizer.vertical {
-    cursor: col-resize;
+  cursor: col-resize;
 }
 
 
 
-/*  ------------------------    */
 
-
-
-html {
-    position: relative;
-  }
-  
-  body {
-    margin: 0;
-  }
-  
-  div#wrapper {
-    width: 100%;
-    min-height: 100%;
-  }
-  
-  div#content {
-    padding: 1em;
-    width: calc(70% - 2em);
-    overflow-y: scroll;
-    position: fixed;
-    height: calc(100% - 8em);
-    margin: 1em;
-    border: black;
-    border-style: double;
-  }
-  
-  div#tactic_state_wrapper {
-    top: 4em;
-    position: fixed;
-    margin-left: 70%;
-    margin: 1em 1em 1em 70%;
-    padding: 1em;
-    width: calc(30% - 6em);
-    height: calc(100% - 8em);
-    border-style: double;
-  }
-
-  div.content {
-    line-height: 1.4rem;
-  }
-  
-  p {
-    line-height: 1.5rem;
-  }
-
-  .underbar {
-    text-decoration: underline;
-  }
-  
-  
-  
-  div.definition_wrapper {
-    margin-top: 1rem;
-  }
-  
-  span.definition_label {
-    font-weight: bold;
-  }
-  
-  div.definition_content {
-    margin-left: 0.5rem;
-    padding-left: 0.5rem;
-    border-left: 0.15rem solid black;
-  }
-    
-  div.definition_lean {
-    display: none;
-  }
-  
-  div.example_wrapper {
-    margin-top: 1rem;
-  }
-  
-  span.example_label {
-    font-weight: bold;
-  }
-  
-  div.example_content {
-    margin-left: 0.5rem;
-    padding-left: 0.5rem;
-    border-left: 0.25rem solid black;
-  }
-  
-  div.example_lean {
-    display: none;
-  }
-  
-  div.lemma_wrapper {
-    margin-top: 1rem;
-  }
-  
-  span.lemma_label {
-    font-weight: bold;
-  }
-  
-  div.lemma_content {
-    margin-left: 0.5rem;
-    padding-left: 0.5rem;
-    border-left: 0.15rem solid black;
-  }
-
-  div.lemma_proof {
-    margin-left: 0.5rem;
-    padding-left: 0.5rem;
-    border-left: 0.15rem solid black;
-  }
-  
-  /* TODO : change div.lemma_lean ! */
-  div.lemma_lean {
-    display: block; 
-  }
-  
-  div.theorem_wrapper {
-    margin-top: 1rem;
-  }
-  
-  span.theorem_label {
-    font-weight: bold;
-  }
-  
-  div.theorem_content {
-    margin-left: 0.5rem;
-    padding-left: 0.5rem;
-    border-left: 0.25rem solid black;
-  }
-  
-  div.theorem_lean {
-    display: none;
-  }
-    
-/* -------------------------------------- */
+/* Accordion */
 
 .accordion {
   border: 1px solid rgba(0, 0, 0, 0.1);
@@ -334,8 +164,8 @@ html {
 }
 
 .accordion__button {
-  background-color: #f4f4f4;
-  color: #444;
+  background-color: var(--bg-color, #f4f4f4);
+  color: var(--color, #444);
   cursor: pointer;
   padding: 18px;
   text-align: left;
@@ -343,7 +173,7 @@ html {
 }
 
 .accordion__button:hover {
-  background-color: #ddd;
+  background-color: var(--bg-color, #ddd);
 }
 
 .accordion__button:before {
@@ -363,13 +193,11 @@ html {
 }
 
 .accordion__panel {
+  background-color: var(--bg-color, initial);
+  color: var(--color, initial);
   padding: 5px;
   animation: fadein 0.35s ease-in;
 }
-
-/* -------------------------------------------------- */
-/* ---------------- Animation part ------------------ */
-/* -------------------------------------------------- */
 
 @keyframes fadein {
   0% {

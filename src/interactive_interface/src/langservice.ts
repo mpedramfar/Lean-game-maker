@@ -45,13 +45,10 @@ const watchers = new Map<string, ModelWatcher>();
 
 export let delayMs = 1000;
 
-export interface editorTextDataInterface {
+export interface editorDataInterface {
   lineOffset: number,
   fileContent: string,
   text: string,
-  world?: number,
-  level?: number,
-  saved?: boolean,
 }
 
 
@@ -60,9 +57,9 @@ class ModelWatcher implements monaco.IDisposable {
   private syncTimer = new CoalescedTimer();
   private version = 0;
 
-  private editorData: editorTextDataInterface;
+  private editorData: editorDataInterface;
 
-  constructor(private model: monaco.editor.IModel, editorData: editorTextDataInterface) {
+  constructor(private model: monaco.editor.IModel, editorData: editorDataInterface) {
     this.changeSubscription = model.onDidChangeContent((e) => {
       completionBuffer.cancel();
       // this.checkInputCompletion(e);
@@ -189,7 +186,7 @@ function toSeverity(severity: lean.Severity): monaco.Severity {
 }
 
 
-export function registerLeanLanguage(leanJsOpts: lean.LeanJsOpts, editorData: editorTextDataInterface) {
+export function registerLeanLanguage(leanJsOpts: lean.LeanJsOpts, editorData: editorDataInterface, isInfoMessage: (m: lean.Message)=>boolean) {
   if (server) {
     return;
   }
@@ -229,9 +226,7 @@ export function registerLeanLanguage(leanJsOpts: lean.LeanJsOpts, editorData: ed
         }
 
         // In the constructor of the Game, we added a line "#eval ..." at the end of every page.
-        if(msg.severity == "information" && msg.caption == "eval result"
-              && msg.pos_line == editorData.fileContent.split(/\r\n|\r|\n/).length
-              && msg.text == '"' + (editorData.world+1) + "," + (editorData.level+1) + '"'){
+        if(isInfoMessage(msg)){
           continue;
         }
 
