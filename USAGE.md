@@ -169,8 +169,16 @@ dedicated software such as [poedit](https://poedit.net/).
 After addding a translation, generate the file `content.mo`.
 In poedit, this can be done by simply clicking the save button.
 
-You can then use `make-lean-game --locale=fr` to use your new
-translation. 
+You can then use 
+```bash
+make-lean-game --locale=fr
+```
+to use your new
+translation. To use multiple languages, you can use
+```bash
+make-lean-game --locale=en+fr
+```
+If any language doesn't have a translation, then the original text will be used.
 
 Afer updating the game, you can merge the template file
 by running, inside the `LC_MESSAGES` folder:

@@ -1,12 +1,10 @@
 /// <reference types="monaco-editor" />
 import { InfoRecord, LeanJsOpts, Message } from '@bryangingechen/lean-client-js-browser';
 import * as React from 'react';
-import { createPortal, findDOMNode, render } from 'react-dom';
+import { findDOMNode, render } from 'react-dom';
 import { allMessages, checkInputCompletionChange, checkInputCompletionPosition, currentlyRunning, delayMs,
   registerLeanLanguage, server, tabHandler, editorDataInterface } from './langservice';
-
 import { Container, Section, Bar } from 'react-simple-resizer';
-
 import {
   Accordion,
   AccordionItem,
@@ -14,7 +12,6 @@ import {
   AccordionItemButton,
   AccordionItemPanel,
 } from 'react-accessible-accordion';
-
 import ForceGraph2D from 'react-force-graph-2d';
 import * as d3 from 'd3';
 
@@ -29,7 +26,8 @@ let markdownConverter = new showdown.Converter({
 });
 
 
-
+let gameTexts: Array<Array<string>>;
+const CurrentLanguageIndexContext = React.createContext(0);
 
 
 
@@ -385,10 +383,13 @@ interface WorldData {
 interface GameData {
   name: string;
   version: string;
-  library_zip_fn: string;
+  languages: Array<string>;
+  translated_name: string;
   devmode: boolean;
-  worlds: Array<WorldData>;
+  library_zip_fn: string;
   introData: LevelData;
+  worlds: Array<WorldData>;
+  texts: Array<Array<string>>;
 }
 // **********************************************************
 
@@ -561,6 +562,8 @@ class Provable extends React.Component<ProvableProps, {}> {
   }
 
   render() {
+    const getGameText = (i) => gameTexts[this.context][i];
+    
     let proof, copyButton;
     if( this.props.isActive ){
       proof = <LeanEditor {...this.props} readonly={this.props.type=="example"} />;
@@ -568,7 +571,7 @@ class Provable extends React.Component<ProvableProps, {}> {
         navigator.clipboard.writeText(this.props.lean + "begin\n" + this.props.getCurrentEditorText() + "\nend");
       }} title="Copy to clipboard" >&#x1f4cb;</button>;
     } else {
-      proof = <LeanColorize text={this.props.editorText}/>;
+      proof = <LeanColorize text={getGameText(this.props.editorText)}/>;
     }
 
     const title = (this.props.type == "lemma") ? "Lemma" :
@@ -579,7 +582,7 @@ class Provable extends React.Component<ProvableProps, {}> {
         <span className="problem_label" >{title}</span>
         <div className="problem_content">
 	        <div className="problem_text">
-	          { this.props.text }
+	          <Text content={getGameText(this.props.text)}/>
     	    </div>
       	  <div className="problem_lean">
 	          <LeanColorize text={this.props.lean} />
@@ -602,6 +605,7 @@ class Provable extends React.Component<ProvableProps, {}> {
 
   }
 }
+Provable.contextType = CurrentLanguageIndexContext;
 
 
 
@@ -632,18 +636,20 @@ class Level extends React.Component<LevelProps, LevelState> {
   }
 
   render() {
+    const getGameText = (i) => gameTexts[this.context][i];
+
     const content = this.props.levelData.objects.map( (itemData, i) => {
       if( itemData.type == "text" )
       {
-        return <Text  key={i} content={(itemData as any).content}  />;
+        return <Text  key={i} content={getGameText((itemData as any).content)}  />;
       } 
       else if( itemData.type == "hint" )
       {
-        return <Hint key={i} title={(itemData as any).title}  content={(itemData as any).content}  />;
+        return <Hint key={i} title={getGameText((itemData as any).title)}  content={getGameText((itemData as any).content)}  />;
       } 
       else if( itemData.type == "lean" && (! (itemData as any).hidden))
       {
-        return <LeanColorize key={i} text={(itemData as any).content}/>
+        return <LeanColorize key={i} text={getGameText((itemData as any).content)}/>
       }
       else if( itemData.type == "lemma" || itemData.type == "theorem" || itemData.type == "definition" || itemData.type == "example")
       {
@@ -661,6 +667,7 @@ class Level extends React.Component<LevelProps, LevelState> {
     return <div className="level_content">{content}</div>;
   }
 }
+Level.contextType = CurrentLanguageIndexContext;
 
 
 interface SideBarProps {
@@ -786,6 +793,7 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
 
 
   render(){
+    const getGameText = (i) => gameTexts[this.context][i];
 
     const sideBarAccordion = (label, list) => {
       if(list.length == 0)
@@ -814,23 +822,23 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
 
 
     const tacticsAccordion = sideBarAccordion("Tactics", data.tactics.map((s, i) => {
-      return sideBarAccordion(s.name, [<Text key={"tactic,text,"+i} content={s.content} />]);
+      return sideBarAccordion(s.name, [<Text key={"tactic,text,"+i} content={getGameText(s.content)} />]);
     }));
 
     const examplesAccordion = sideBarAccordion("Examples", data.examples.map((s, i) => {
       return (
         <div>
           <LeanColorize key={"example,statement,"+i} text={s.lean} />
-          <LeanColorize key={"example,proof,"+i} text={"begin\n" + s.proof + "\nend"} />
+          <LeanColorize key={"example,proof,"+i} text={"begin\n" + getGameText(s.proof) + "\nend"} />
           <hr/>
         </div>);
     }));
 
-    const statementsAccordion = sideBarAccordion("Theorem statements", data.sortedStatements.map((statements, w) => {
+    const statementsAccordion = data.sortedStatements.some((v) => v.length) ? sideBarAccordion("Theorem statements", data.sortedStatements.map((statements, w) => {
       if(!statements) return [];
-      let label = this.props.worlds[w].name;
+      let label = getGameText(this.props.worlds[w].name);
       return sideBarAccordion(label, statements.map((s, i) =>{
-        let e = "  " + ((s.type == "axiom") ? (s as any).content : (s as any).statement);
+        let e = "  " + ((s.type == "axiom") ? getGameText((s as any).content) : (s as any).statement);
         return (
           <div>
             <LeanColorize key={s.type+",name,"+i} text={s.name} />
@@ -839,8 +847,10 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
           </div>
         );
       }));
-    }));
+    })) : null;
 
+    if(!tacticsAccordion && !statementsAccordion && !examplesAccordion)
+      return null;
 
     return (
       <div style={{fontSize: "small", overflowY: "auto", height: "100%", overflowX: "hidden"}}>
@@ -854,7 +864,7 @@ class SideBar extends React.Component<SideBarProps, SideBarState> {
     
   }
 }
-
+SideBar.contextType = CurrentLanguageIndexContext;
 
 
 function getGraphData(worlds : Array<WorldData>){
@@ -992,7 +1002,7 @@ class Graph extends React.Component<GraphProps, GraphState> {
     ctx.fill();  
 
     // write the world name
-    const label = node.worldData.name;
+    const label = gameTexts[this.context][node.worldData.name];
     const scaledFontSize = fontSize/globalScale;
     ctx.font = `${scaledFontSize}px Sans-Serif`;
     const textWidth = ctx.measureText(label).width;
@@ -1044,7 +1054,7 @@ class Graph extends React.Component<GraphProps, GraphState> {
       onNodeHover={this.handleNodeHover.bind(this)}
       onNodeClick={(node) => {this.props.gotoWorld(node.id)}}
       nodeLabel={(node) => {
-        return markdownConverter.makeHtml(this.props.worlds[node.id].name);
+        return markdownConverter.makeHtml(gameTexts[this.context][this.props.worlds[node.id].name]);
       }}
       enableNodeDrag={false}
       enableZoomPanInteraction={false}
@@ -1054,17 +1064,56 @@ class Graph extends React.Component<GraphProps, GraphState> {
   };
   
 }
+Graph.contextType = CurrentLanguageIndexContext;
+
+
+interface LanguageMenuProps {
+  languages: Array<string>;
+  currentLanguageIndex: number;
+  updateLanguageIndex: (i)=>void;
+}
+interface LanguageMenuState {
+  value: number;
+}
+
+class LanguageMenu extends React.Component<LanguageMenuProps, LanguageMenuState> {
+  constructor(props) {
+    super(props);
+    this.state = {value: this.props.currentLanguageIndex};
+    this.handleChange = this.handleChange.bind(this);
+  }
+
+  handleChange(event) {
+    this.props.updateLanguageIndex(event.target.value);
+    this.setState({value: event.target.value});
+  }
+
+  render() {
+    if(this.props.languages.length == 1)
+      return null;
+    return (
+      <select value={this.state.value} onChange={this.handleChange}
+        style={{ float: 'right', width: '8%', height:'100%' }} className='language-menu'>
+        {this.props.languages.map((lang, i) => (
+          <option value={i}>{lang.toUpperCase()}</option>
+        ))}
+      </select>
+    );
+  }
+}
 
 
 
 
 interface GameProps {
   fileName: string;
+  languages: Array<string>;
+  currentLanguageIndex: number;
   worlds: Array<WorldData>;
   introData: LevelData;
-  name: string;
   world: number;
   level: number;
+  updateLanguageIndex: (number)=>void;
   saveGame: ()=>void;
   resetGame: ()=>void;
   updateURL: (world: number, level: number)=>void;
@@ -1075,6 +1124,7 @@ interface GameProps {
   updateDarkMode: (mode: boolean) => void;
 }
 interface GameState {
+  currentLanguageIndex: number;
   world: number;
   level: number;
   cursor?: Position;
@@ -1092,8 +1142,9 @@ class Game extends React.Component<GameProps, GameState> {
       if(worldData.isSolved)
         solvedWorlds = solvedWorlds.concat([w]);
     })
-    
+
     this.state = {
+      currentLanguageIndex: this.props.currentLanguageIndex,
       world: this.props.world,
       level: this.props.level,
       solvedWorlds: solvedWorlds,
@@ -1140,20 +1191,31 @@ class Game extends React.Component<GameProps, GameState> {
 
   render() {
     
-
+    
     const resetButton = <button className='ridge-button'
-      style={{ float: 'right', width: '10%', height:'100%', fontSize: 'x-large' }}
+      style={{ 
+        float: 'right', height:'100%', fontSize: 'x-large',
+        width: (this.props.languages.length > 1 ? '6%' : '10%')
+      }}
       onClick={this.props.resetGame} title={"Reset game"}
       dangerouslySetInnerHTML={{__html: "&#8634;"}}></button>;
     
     const brighnessButton = <button className='ridge-button'
-      style={{ float: 'right', width: '10%', height:'100%', fontSize: 'x-large' }}
+      style={{ 
+        float: 'right', height:'100%', fontSize: 'x-large',
+        width: (this.props.languages.length > 1 ? '6%' : '10%')
+      }}
       onClick={() => {
         this.props.updateDarkMode(!this.state.darkMode);
         this.setState({darkMode: !this.state.darkMode});
       }} title={this.state.darkMode ? "Day mode" : "Night mode"} 
       dangerouslySetInnerHTML={{__html: this.state.darkMode ? "&#x1f506;" : "&#x1f505;"}}></button>;
-
+    
+    const languageMenu = <LanguageMenu languages={this.props.languages} currentLanguageIndex={this.state.currentLanguageIndex}
+      updateLanguageIndex={(i)=>{
+        this.props.updateLanguageIndex(i);
+        this.setState({currentLanguageIndex: i});
+      }}/>;
 
     if(this.state.world == -1){
 
@@ -1161,6 +1223,7 @@ class Game extends React.Component<GameProps, GameState> {
         <div className="first-button-panel">
           {resetButton}
           {brighnessButton}
+          {languageMenu}
         </div>
       );  
 
@@ -1173,6 +1236,7 @@ class Game extends React.Component<GameProps, GameState> {
                             width={window.innerWidth*0.4} height={window.innerHeight} darkMode={this.state.darkMode}/>;
 
       return (
+        <CurrentLanguageIndexContext.Provider value={this.state.currentLanguageIndex}>
         <div style={{ position: 'fixed', top: '0', bottom: '0', left: '0', right: '0'}}>
           <Container style={{ height: '100%' }}>
           <Section defaultSize={window.innerWidth*0.6}>
@@ -1189,6 +1253,7 @@ class Game extends React.Component<GameProps, GameState> {
           </Container>
           {buttonsPanel}
         </div>
+        </CurrentLanguageIndexContext.Provider>
       );
     }
 
@@ -1196,12 +1261,14 @@ class Game extends React.Component<GameProps, GameState> {
     const levelData = worldData.levels[this.state.level];
     const problemKey = "" + (this.state.world+1) + "," + (this.state.level+1);
 
+    const getGameText = (i) => gameTexts[this.state.currentLanguageIndex][i];
+
     const worldLabel = (
       <div style={{ textAlign: 'center' }}>
         <h3>
           <Text content={
             (worldData.isSolved ? "&#10004; " : "") +
-            worldData.name}/>
+            getGameText(worldData.name)}/>
         </h3>
       </div>
     );
@@ -1211,6 +1278,7 @@ class Game extends React.Component<GameProps, GameState> {
           onClick= {() => { this.gotoWorld.call(this, -1); }}> Main Menu </button>
         {resetButton}
         {brighnessButton}
+        {languageMenu}
         {worldLabel}
       </div>
     );
@@ -1222,7 +1290,7 @@ class Game extends React.Component<GameProps, GameState> {
           <Text content={
             (levelData.isSolved ? "&#10004; " : "") +
             "Level " + (this.state.level + 1) + "/" + worldData.levels.length + 
-            (levelData.name ? " -- " + levelData.name : "")
+            (levelData.name ? " -- " + getGameText(levelData.name) : "")
           }/>
         </h4>
       </div>
@@ -1263,11 +1331,11 @@ class Game extends React.Component<GameProps, GameState> {
 
     const mainDiv = (
       <Container style={{ height: '100%' }}>
-        <Section defaultSize={window.innerWidth*0.15}>
+        <Section defaultSize={sideBarDiv ? window.innerWidth*0.15 : 0}>
           {sideBarDiv}
         </Section>
         <Bar size={10} className='Resizer vertical' />
-        <Section minSize={200} defaultSize={window.innerWidth*0.5}>
+        <Section minSize={200} defaultSize={sideBarDiv ? window.innerWidth*0.5 : window.innerWidth*0.65}>
           {content}
         </Section>
         <Bar size={10} className='Resizer vertical' />
@@ -1275,9 +1343,10 @@ class Game extends React.Component<GameProps, GameState> {
           {infoViewDiv}
         </Section>
       </Container>
-    );
+      );
 
     return (
+      <CurrentLanguageIndexContext.Provider value={this.state.currentLanguageIndex}>
       <div>
         {worldButtonsPanel}
         {levelButtonsPanel}
@@ -1285,9 +1354,11 @@ class Game extends React.Component<GameProps, GameState> {
           {mainDiv}
         </div>
       </div>
+      </CurrentLanguageIndexContext.Provider>
     );  
   }
 }
+Game.contextType = CurrentLanguageIndexContext;
 
 
 
@@ -1297,6 +1368,7 @@ class Game extends React.Component<GameProps, GameState> {
 class PageManager {
 
   static gameData: GameData;
+  static currentLanguageIndex: number;
   static world: number;
   static level: number;
   static isSaved: boolean;
@@ -1397,7 +1469,12 @@ class PageManager {
       }
     }
 
-    let savedGameData = {name: this.gameData.name, version: this.gameData.version, data: []};
+    let savedGameData = {
+      name: this.gameData.name, 
+      version: this.gameData.version, 
+      language: this.gameData.languages[this.currentLanguageIndex],
+      data: []
+    };
     for(let w = 0; w < this.gameData.worlds.length; w++){
       let worldData = this.gameData.worlds[w];
       for(let l = 0; l < worldData.levels.length; l++){
@@ -1458,14 +1535,27 @@ class PageManager {
         }
         worldData.isSolved = worldData.levels.every((levelData)=> levelData.isSolved );
       }
+      this.currentLanguageIndex = blankGameData.languages.findIndex((l) => l==savedGameData.language);
+      if(this.currentLanguageIndex == -1){
+        this.currentLanguageIndex = 0;
+      }
     }
 
 
     this.gameData = blankGameData;
+    gameTexts = this.gameData.texts;
+
+    this.updateLanguageIndex(this.currentLanguageIndex);
+
     this.readURL();
+
     this.updateDarkMode(Boolean(JSON.parse(localStorage.getItem('darkMode'))));
   }
 
+  static updateLanguageIndex(index: number){
+    document.title = gameTexts[index][this.gameData.translated_name];
+    this.currentLanguageIndex = index;
+  }
 
   static run(){
 
@@ -1479,8 +1569,6 @@ class PageManager {
 
         this.loadGame(blankGameData as GameData);
 
-        document.title = this.gameData.name;
-  
         // The following is used in InfoView to accurately say when a problem is solved.
         this.gameData.worlds.forEach((worldData, w)=>{
           worldData.levels.forEach((levelData, l)=>{
@@ -1518,8 +1606,10 @@ class PageManager {
             const fn = monaco.Uri.file( this.gameData.library_zip_fn.slice(0, -3) + 'lean').fsPath;
 
             render(
-                <Game fileName={fn} worlds={this.gameData.worlds} name={this.gameData.name} 
+                <Game fileName={fn} worlds={this.gameData.worlds} 
                         introData={this.gameData.introData} world={this.world} level={this.level}
+                        languages={this.gameData.languages} currentLanguageIndex={this.currentLanguageIndex}
+                        updateLanguageIndex={this.updateLanguageIndex.bind(this)}
                         saveGame={this.saveGame.bind(this)} resetGame={this.resetGame.bind(this)}
                         updateURL={this.updateURL.bind(this)} updateEditorData={this.updateEditorData.bind(this)}
                         isInfoMessage={isInfoMessage} getCurrentEditorText={() => this.activeEditorData.text}

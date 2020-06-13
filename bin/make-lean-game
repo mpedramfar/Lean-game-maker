@@ -1,31 +1,16 @@
 #! /usr/bin/env python3
 
-from pathlib import Path
-from datetime import datetime
-import subprocess
-
-import toml
-import jsonpickle
 import distutils.dir_util
-import gettext
-from polib import POFile, POEntry
 from fire import Fire
+from pathlib import Path
+import jsonpickle
+import toml
 
 import lean_game_maker
 from lean_game_maker.line_reader import FileReader
-from lean_game_maker.objects import (default_line_handler,
-    HiddenBegin, HiddenEnd,
-    TextBegin, TextEnd,
-    HintBegin, HintEnd,
-    TacticBegin, TacticEnd,
-    AxiomBegin, AxiomEnd,
-    ExampleBegin, ExampleEnd,
-    LemmaBegin, LemmaEnd,
-    TheoremBegin, TheoremEnd,
-    DefinitionBegin, DefinitionEnd,
-    ProofBegin, ProofEnd, translate)
-
-from lean_game_maker.interactive_loader import interactive_server
+from lean_game_maker.translator import Translator
+from lean_game_maker.objects import default_line_handler, readers_list
+from lean_game_maker.interactive_loader import InteractiveServer
 
 module_path = Path(lean_game_maker.__file__).parent
 interactive_path = module_path.parent / 'interactive_interface'
@@ -34,8 +19,7 @@ def render_lean_project(outdir=None, nolib=False, devmode=False, locale='en'):
     try:
         leanpkg_toml = toml.load('leanpkg.toml')
     except FileNotFoundError:
-        print("Couldn't find a leanpkg.toml, I give up.")
-        return
+        raise FileNotFoundError("Couldn't find a leanpkg.toml, I give up.")
     toolchain = leanpkg_toml['package']['lean_version']
 
 
@@ -49,113 +33,74 @@ def render_lean_project(outdir=None, nolib=False, devmode=False, locale='en'):
     if 'extra_files' in game_config and Path(game_config['extra_files']).is_dir():
         distutils.dir_util.copy_tree(str(Path('.')/game_config['extra_files']), str(Path(outdir)/game_config['extra_files']))
 
-    pot = POFile(check_for_duplicate=True)
-    pot.metadata = {
-	'Project-Id-Version': game_config['version'],
-	'POT-Creation-Date': str(datetime.now()),
-	'MIME-Version': '1.0',
-	'Content-Type': 'text/plain; charset=utf-8',
-    }
-
-    (Path('.')/'locale').mkdir(exist_ok=True)
-    translation = gettext.translation('content', localedir=Path('.')/'locale',
-            languages=[locale], fallback=True)
-    translation.install()
 
     name = game_config.get('name', 'Lean game')
-    pot.append(POEntry(msgid=name, occurrences=[('game_config', '')]))
-    game_data = { 
-        'name'   : _(name), 
-        'version': str(game_config.get('version', '')), 
-        'worlds' : [],
+    version = str(game_config.get('version', ''))
+    translator = Translator(locale, version)
+
+    game_data = {
+        'name'   : name,
+        'version': version, 
+        'languages': translator.languages,
+        'translated_name': translator.register(name, True, occ='game_config'),
         'devmode': devmode,
+        'library_zip_fn': f'{name}-{version}-library.zip',
+        'introData': {},
+        'worlds' : [],
+        'texts': {},
     }
-    game_data['library_zip_fn'] = game_data['name'] + '-' + game_data['version'] + '-library.zip'
 
 
-    s = interactive_server(interactive_path=interactive_path,toolchain=toolchain,
-            outdir=outdir, library_zip_fn= game_data['library_zip_fn'])
-    if not s.copy_files(make_lib = not nolib):
-        return
+    InteractiveServer(interactive_path=interactive_path,toolchain=toolchain, outdir=outdir,
+            library_zip_fn= game_data['library_zip_fn']).copy_files(make_lib = not nolib)
 
 
-
-    file_reader = FileReader(default_line_handler,
-            [HiddenBegin, HiddenEnd,
-             TextBegin, TextEnd,
-             HintBegin, HintEnd,
-             TacticBegin, TacticEnd,
-             AxiomBegin, AxiomEnd,
-             ExampleBegin, ExampleEnd,
-             LemmaBegin, LemmaEnd,
-             TheoremBegin, TheoremEnd,
-             DefinitionBegin, DefinitionEnd,
-             ProofBegin, ProofEnd ])
+    file_reader = FileReader(translator, default_line_handler, readers_list)
 
     print(f"Intro page ...", end="")
-    intro_file = game_config['intro']
-    if not Path(intro_file).exists():
-        print(f'\n\n Error: The file "{intro_file}" does not exist.')
-        return
-    file_reader.read_file(intro_file)
-    translate(file_reader.output, translation, pot, 'intro')
-    game_data['introData'] = jsonpickle.loads(jsonpickle.dumps(
-        {'objects' : file_reader.output}, unpicklable=True))
-    file_reader.hard_reset()
+    game_data['introData'] = file_reader.read_file(game_config['intro'], occ='intro')
+    game_data['introData']['problemIndex'] = -1
     print(f"\rIntro page ... done")
 
     for w, world_config in enumerate(game_config['worlds']):
-        pot.append(POEntry(msgid=world_config['name'], occurrences=[('world_config', '')]))
-        world_data = { 'name': _(world_config['name']), 'levels' : [] }
+        print(f"{world_config['name']} :")
 
-        print(f"{world_data['name']} :")
+        world_data = { 
+            'name': translator.register(world_config['name'], True, occ='world_config'), 
+            'levels' : [] 
+        }
 
         if world_config.get('id', w+1) != w+1:
-            print("\n\n Error: World id must start with 1 and increase by 1 at each world.")
-            return
+            raise Exception("World id must start with 1 and increase by 1 at each world.")
 
         if 'parents' in world_config:
             world_data['parents'] = []
             for i in world_config['parents']:
                 if i >= w+1:
-                    print("\n\n Error: Parent ID must be smaller than the world ID.")
-                    return
+                    raise Exception("Parent ID must be smaller than the world ID.")
                 world_data['parents'].append(i-1)
 
         for i, level_address in enumerate(world_config['levels']):
-            if not Path(level_address).exists():
-                print(f'\n\n Error: The file "{level_address}" does not exist.')
-                return
             print(f"\tlevel {i+1} ...", end="")
-            file_reader.read_file(level_address)
-            if file_reader.output:
-                translate(file_reader.output, translation, pot, f"{world_config['name']} level {i+1}")
-                level_data = {'name': file_reader.name, 'problemIndex': file_reader.problemIndex, 'objects' : file_reader.output}
-                level_data = jsonpickle.loads(jsonpickle.dumps(level_data, unpicklable=True))
-                world_data['levels'].append(level_data)
-            else:
-                print(f'\n\n Error: The file "{level_address}" is empty.')
-                return
-            file_reader.hard_reset()
+            level_data = file_reader.read_file(level_address, occ=f"{world_config['name']} level {i+1}")
+            world_data['levels'].append(level_data)
             print(f"\r\tlevel {i+1} ... done")
 
         if world_data['levels']:
             game_data['worlds'].append(world_data)
         else:
-            print(f'\n\n Error: World {w+1} has no levels.')
-            return
+            raise Exception(f'World {w+1} has no levels.')
 
+    game_data['texts'] = translator.translated_texts
 
     with open(str(Path(outdir) / 'game_data.json'), 'w') as f:
-        temp = jsonpickle.encode(game_data, unpicklable=False)
-        f.write(temp)
+        f.write(jsonpickle.encode(game_data, unpicklable=False))
 
-    pot_path = Path('.')/'locale'/'content.pot'
-    pot.save(pot_path)
-    proc = subprocess.run(['msguniq', str(pot_path)], stdout=subprocess.PIPE)
-    pot_path.write_text(proc.stdout.decode())
-
+    translator.save_pot()
 
 
 if __name__ == '__main__':
-    Fire(render_lean_project)
+    try:
+        Fire(render_lean_project)
+    except Exception as e:
+        print('\n\nError:', e)

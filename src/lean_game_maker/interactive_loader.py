@@ -5,7 +5,7 @@ import glob, distutils.dir_util
 from pathlib import Path
 
 
-class interactive_server:
+class InteractiveServer:
     def __init__(self, interactive_path, toolchain, outdir, library_zip_fn):
         self.interactive_path = interactive_path
         self.toolchain = toolchain
@@ -96,23 +96,18 @@ class interactive_server:
                 f.write('\n')
                 print('Wrote olean map to {0}'.format(map_fn))        
 
-    def server_exists(self):
+    def check_server_exists(self):
         p = Path(self.interactive_path / 'lean_server' / self.toolchain)
         p.mkdir(parents=True, exist_ok=True)
         for f in ['lean_js_js.js', 'lean_js_wasm.js', 'lean_js_wasm.wasm']:
             if not (p / f).is_file():
-                print(f'\n\n Error: Could not find the file "{p/f}" which is necessary to run Lean in the browser.')
-                return False
-        return True
+                raise FileNotFoundError(f'Could not find the file "{p/f}" which is necessary to run Lean in the browser.')
 
 
     def copy_files(self, make_lib=True):
-        if not self.server_exists():
-            return False
+        self.check_server_exists()
         
         distutils.dir_util.copy_tree(self.interactive_path / 'dist', str(Path(self.outdir)))
         distutils.dir_util.copy_tree(self.interactive_path / 'lean_server' / self.toolchain, str(Path(self.outdir)))
         if make_lib:
             self.make_library()
-        
-        return True

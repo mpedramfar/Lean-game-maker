@@ -22,6 +22,12 @@ body {
   color: var(--color, initial);
 }
 
+.language-menu {
+  border: ridge;
+  background-color: var(--bg-color, initial);
+  color: var(--color, initial);
+}
+
 a {
   color: var(--a-color, blue);
 } 

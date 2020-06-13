@@ -1,28 +1,23 @@
 #!/usr/bin/env python3
 from typing import Match, List, ClassVar
 from dataclasses import dataclass
-from gettext import gettext, NullTranslations
-from pathlib import Path
 
-import regex # type: ignore
-from polib import POFile, POEntry # type: ignore
+import regex
 
 from lean_game_maker.line_reader import LineReader, dismiss_line, FileReader
+from lean_game_maker.translator import Translator
 
 ############
 #  Objects #
 ############
 
 class PageObject:
-    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
+    def translate(self, translator: Translator) -> None:
         pass
 
     def __getstate__(self):
         return {'type': self.type, **self.__dict__}
 
-def translate(objects: List[PageObject], translation: NullTranslations, pot: POFile, occ: str) -> None:
-    for obj in objects:
-        obj.translate(translation, pot, occ)
 
 @dataclass
 class Text(PageObject):
@@ -32,34 +27,25 @@ class Text(PageObject):
     def append(self, line: str) -> None:
         self.content += line
 
-    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
-        pot.append(POEntry(msgid=self.content, occurrences=[(occ, '')]))
-        self.content = translation.gettext(self.content)
+    def translate(self, translator: Translator) -> None:
+        self.content = translator.register(self.content, True)
 
 @dataclass
 class LeanLines(Text):
     type: ClassVar[str] = 'lean'
     hidden: bool = False
 
-    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
-        if self.hidden:
-            return
-        lean_lines = self.content.split('\n')
-        for i, line in enumerate(lean_lines):
-            if '--' in line:
-                lean_lines[i] = translation.gettext(line)
-                pot.append(POEntry(msgid=line, occurrences=[(occ, '')]))
-        self.content = '\n'.join(lean_lines)
+    def translate(self, translator: Translator) -> None:
+        self.content = translator.register(self.content, not self.hidden, True)
 
 @dataclass
 class Hint(Text):
     type: ClassVar[str] = 'hint'
     title: str = ''
 
-    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
-        super().translate(translation, pot, occ)
-        pot.append(POEntry(msgid=self.title, occurrences=[(occ, '')]))
-        self.title = translation.gettext(self.title)
+    def translate(self, translator: Translator) -> None:
+        self.content = translator.register(self.content, True)
+        self.title = translator.register(self.title, True)
 
 
 @dataclass
@@ -74,9 +60,8 @@ class Axiom(Text):
     name: str = ''
     sideBar: bool = True
 
-    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
-        pass
-
+    def translate(self, translator: Translator) -> None:
+        self.content = translator.register(self.content, False)
 
 @dataclass
 class Bilingual(PageObject):
@@ -94,15 +79,9 @@ class Bilingual(PageObject):
     def lean_append(self, line):
         self.lean += line
 
-    def translate(self, translation: NullTranslations, pot: POFile, occ: str) -> None:
-        self.text = translation.gettext(self.text)
-        pot.append(POEntry(msgid=self.text, occurrences=[(occ, '')]))
-        lean_lines = self.lean.split('\n')
-        for i, line in enumerate(lean_lines):
-            if '--' in line:
-                lean_lines[i] = translation.gettext(line)
-                pot.append(POEntry(msgid=line, occurrences=[(occ, '')]))
-        self.lean = '\n'.join(lean_lines)
+    def translate(self, translator: Translator) -> None:
+        self.text = translator.register(self.text, True)
+        ## The lean statement of a problem shouldn't be translated. 
 
 
 @dataclass
@@ -131,13 +110,16 @@ HIDDEN_LINE_RE = regex.compile(r'^.*--\s*hide\s*$', flags=regex.IGNORECASE)
 def default_line_handler(file_reader: FileReader, line: str) -> None:
     m = LEVEL_NAME_RE.match(line)
     if m:
-        file_reader.name = m.group(1).strip()
+        name = m.group(1).strip()
+        if name != '':
+            file_reader.name = file_reader.translator.register(name,True)
+            
     elif HIDDEN_LINE_RE.match(line):
-        file_reader.output.append(LeanLines(content=line, hidden=True))
-    elif file_reader.output and file_reader.output[-1].type == 'lean' and file_reader.output[-1].hidden == False:
-        file_reader.output[-1].append(line)
+        file_reader.objects.append(LeanLines(content=line, hidden=True))
+    elif file_reader.objects and file_reader.objects[-1].type == 'lean' and file_reader.objects[-1].hidden == False:
+        file_reader.objects[-1].append(line)
     else:
-        file_reader.output.append(LeanLines(content=line))
+        file_reader.objects.append(LeanLines(content=line))
 
 #################
 #  Line readers #
@@ -151,7 +133,7 @@ class HiddenBegin(LineReader):
             return False
         file_reader.status = 'hidden'
         lean_lines = LeanLines(hidden=True)
-        file_reader.output.append(lean_lines)
+        file_reader.objects.append(lean_lines)
         def normal_line(file_reader: FileReader, line: str) -> None:
             lean_lines.append(line)
         file_reader.normal_line_handler = normal_line
@@ -176,7 +158,7 @@ class TextBegin(LineReader):
             return False
         file_reader.status = 'text'
         text = Text()
-        file_reader.output.append(text)
+        file_reader.objects.append(text)
         def normal_line(file_reader: FileReader, line: str) -> None:
             text.append(line)
         file_reader.normal_line_handler = normal_line
@@ -201,7 +183,7 @@ class HintBegin(LineReader):
             return False
         file_reader.status = 'hint'
         hint = Hint(title = m.group(1).strip())
-        file_reader.output.append(hint)
+        file_reader.objects.append(hint)
         def normal_line(file_reader: FileReader, line: str) -> None:
             hint.append(line)
         file_reader.normal_line_handler = normal_line
@@ -228,7 +210,7 @@ class TacticBegin(LineReader):
         file_reader.status = 'tactic'
         tactic = Tactic(sideBar=True)
         tactic.name = m.group(1).strip()
-        file_reader.output.append(tactic)
+        file_reader.objects.append(tactic)
         def normal_line(file_reader: FileReader, line: str) -> None:
             tactic.append(line)
         file_reader.normal_line_handler = normal_line
@@ -254,7 +236,7 @@ class AxiomBegin(LineReader):
         file_reader.status = 'axiom'
         axiom = Axiom(sideBar=True)
         axiom.name = m.group(1).strip()
-        file_reader.output.append(axiom)
+        file_reader.objects.append(axiom)
         def normal_line(file_reader: FileReader, line: str) -> None:
             axiom.append(line)
         file_reader.normal_line_handler = normal_line
@@ -281,7 +263,7 @@ class LemmaBegin(LineReader):
         file_reader.status = 'lemma_text'
         lemma = Lemma()
         lemma.sideBar = (m.group(1).strip() != 'no-side-bar')
-        file_reader.output.append(lemma)
+        file_reader.objects.append(lemma)
         def normal_line(file_reader: FileReader, line: str) -> None:
             lemma.text_append(line)
         file_reader.normal_line_handler = normal_line
@@ -295,7 +277,7 @@ class LemmaEnd(LineReader):
         if file_reader.status != 'lemma_text':
             return False
         file_reader.status = 'lemma_lean'
-        lemma = file_reader.output[-1]
+        lemma = file_reader.objects[-1]
         def normal_line(file_reader: FileReader, line: str) -> None:
             lemma.lean_append(line)
         file_reader.normal_line_handler = normal_line
@@ -311,7 +293,7 @@ class TheoremBegin(LineReader):
         file_reader.status = 'theorem_text'
         theorem = Theorem()
         theorem.sideBar = not (m.group(1).strip() == 'no-side-bar')
-        file_reader.output.append(theorem)
+        file_reader.objects.append(theorem)
         def normal_line(file_reader: FileReader, line: str) -> None:
             theorem.text_append(line)
         file_reader.normal_line_handler = normal_line
@@ -325,7 +307,7 @@ class TheoremEnd(LineReader):
         if file_reader.status != 'theorem_text':
             return False
         file_reader.status = 'theorem_lean'
-        theorem = file_reader.output[-1]
+        theorem = file_reader.objects[-1]
         def normal_line(file_reader: FileReader, line: str) -> None:
             theorem.lean_append(line)
         file_reader.normal_line_handler = normal_line
@@ -340,7 +322,7 @@ class DefinitionBegin(LineReader):
             return False
         file_reader.status = 'definition_text'
         defn = Definition(sideBar=False)
-        file_reader.output.append(defn)
+        file_reader.objects.append(defn)
         def normal_line(file_reader: FileReader, line: str) -> None:
             defn.text_append(line)
         file_reader.normal_line_handler = normal_line
@@ -354,7 +336,7 @@ class DefinitionEnd(LineReader):
         if file_reader.status != 'definition_text':
             return False
         file_reader.status = 'definition_lean'
-        theorem = file_reader.output[-1]
+        theorem = file_reader.objects[-1]
         def normal_line(file_reader: FileReader, line: str) -> None:
             theorem.lean_append(line)
         file_reader.normal_line_handler = normal_line
@@ -371,7 +353,7 @@ class ExampleBegin(LineReader):
         file_reader.status = 'example_text'
         example = Example()
         example.sideBar = not (m.group(1).strip() == 'no-side-bar')
-        file_reader.output.append(example)
+        file_reader.objects.append(example)
         def normal_line(file_reader: FileReader, line: str) -> None:
             example.text_append(line)
         file_reader.normal_line_handler = normal_line
@@ -385,7 +367,7 @@ class ExampleEnd(LineReader):
         if file_reader.status != 'example_text':
             return False
         file_reader.status = 'example_lean'
-        example = file_reader.output[-1]
+        example = file_reader.objects[-1]
         def normal_line(file_reader: FileReader, line: str) -> None:
             example.lean_append(line)
         file_reader.normal_line_handler = normal_line
@@ -412,3 +394,19 @@ class ProofEnd(LineReader):
         file_reader.reset()
         return True
 
+
+
+#################
+#  Readers list #
+#################
+
+readers_list = [HiddenBegin, HiddenEnd,
+    TextBegin, TextEnd,
+    HintBegin, HintEnd,
+    TacticBegin, TacticEnd,
+    AxiomBegin, AxiomEnd,
+    ExampleBegin, ExampleEnd,
+    LemmaBegin, LemmaEnd,
+    TheoremBegin, TheoremEnd,
+    DefinitionBegin, DefinitionEnd,
+    ProofBegin, ProofEnd]
