@@ -1070,7 +1070,7 @@ Graph.contextType = CurrentLanguageIndexContext;
 interface LanguageMenuProps {
   languages: Array<string>;
   currentLanguageIndex: number;
-  updateLanguageIndex: (i)=>void;
+  updateLanguageIndex: (i: number)=>void;
 }
 interface LanguageMenuState {
   value: number;
@@ -1084,7 +1084,7 @@ class LanguageMenu extends React.Component<LanguageMenuProps, LanguageMenuState>
   }
 
   handleChange(event) {
-    this.props.updateLanguageIndex(event.target.value);
+    this.props.updateLanguageIndex(Number(event.target.value));
     this.setState({value: event.target.value});
   }
 
@@ -1113,7 +1113,7 @@ interface GameProps {
   introData: LevelData;
   world: number;
   level: number;
-  updateLanguageIndex: (number)=>void;
+  updateLanguageIndex: (i: number)=>void;
   saveGame: ()=>void;
   resetGame: ()=>void;
   updateURL: (world: number, level: number)=>void;
@@ -1212,7 +1212,7 @@ class Game extends React.Component<GameProps, GameState> {
       dangerouslySetInnerHTML={{__html: this.state.darkMode ? "&#x1f506;" : "&#x1f505;"}}></button>;
     
     const languageMenu = <LanguageMenu languages={this.props.languages} currentLanguageIndex={this.state.currentLanguageIndex}
-      updateLanguageIndex={(i)=>{
+      updateLanguageIndex={(i: number)=>{
         this.props.updateLanguageIndex(i);
         this.setState({currentLanguageIndex: i});
       }}/>;
@@ -1519,6 +1519,9 @@ class PageManager {
     }
     //---
     
+    this.currentLanguageIndex = 0;
+    this.isSaved = true;
+
     if(savedGameData){
       for(let w = 0; w < blankGameData.worlds.length; w++){
         let worldData = blankGameData.worlds[w];
@@ -1545,16 +1548,34 @@ class PageManager {
     this.gameData = blankGameData;
     gameTexts = this.gameData.texts;
 
-    this.updateLanguageIndex(this.currentLanguageIndex);
+    document.title = gameTexts[this.currentLanguageIndex][this.gameData.translated_name];
 
     this.readURL();
 
     this.updateDarkMode(Boolean(JSON.parse(localStorage.getItem('darkMode'))));
+
+    // The following is used in InfoView to accurately say when a problem is solved.
+    this.gameData.worlds.forEach((worldData, w)=>{
+      worldData.levels.forEach((levelData, l)=>{
+        if(levelData.problemIndex != -1){
+          let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
+          problemData.textAfter += '\n\n#eval "' + (w+1) + "," + (l+1) + '"'; 
+        }
+      })
+    })
+    return { isInfoMessage : (m: Message) => 
+      (m.severity == "information" 
+      && m.caption == "eval result"
+      && m.pos_line == this.activeEditorData.fileContent.split(/\r\n|\r|\n/).length
+      && m.text == '"' + (this.world+1) + "," + (this.level+1) + '"') };
   }
 
   static updateLanguageIndex(index: number){
-    document.title = gameTexts[index][this.gameData.translated_name];
-    this.currentLanguageIndex = index;
+    if(this.currentLanguageIndex != index){
+      this.isSaved = false;
+      document.title = gameTexts[index][this.gameData.translated_name];
+      this.currentLanguageIndex = index;
+    }
   }
 
   static run(){
@@ -1567,25 +1588,7 @@ class PageManager {
       .then((res)=> res.json())
       .then((blankGameData)=>{
 
-        this.loadGame(blankGameData as GameData);
-
-        // The following is used in InfoView to accurately say when a problem is solved.
-        this.gameData.worlds.forEach((worldData, w)=>{
-          worldData.levels.forEach((levelData, l)=>{
-            if(levelData.problemIndex != -1){
-              let problemData = levelData.objects[levelData.problemIndex] as ProvableObject;
-              problemData.textAfter += '\n\n#eval "' + (w+1) + "," + (l+1) + '"'; 
-            }
-          })
-        })
-        let isInfoMessage = (m: Message) => 
-          (m.severity == "information" 
-          && m.caption == "eval result"
-          && m.pos_line == this.activeEditorData.fileContent.split(/\r\n|\r|\n/).length
-          && m.text == '"' + (this.world+1) + "," + (this.level+1) + '"');      
-  
-  
-  
+        const isInfoMessage = this.loadGame(blankGameData as GameData).isInfoMessage;
 
         let dbName = this.gameData.library_zip_fn.slice(0, -4);
         
