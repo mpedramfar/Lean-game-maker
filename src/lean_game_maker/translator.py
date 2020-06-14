@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from polib import POFile, POEntry
+from polib import POFile, POEntry, pofile
 import gettext
 import subprocess
 
@@ -17,8 +17,19 @@ class Translator:
         }
 
         (Path('.')/'locale').mkdir(exist_ok=True)
-        self.languages = locale.lower().split('+')
-        self.translations =[gettext.translation('content', localedir=Path('.')/'locale',
+        self.languages = locale.split('+')
+        for lang in self.languages:
+            if gettext.find('content', localedir=Path('.')/'locale', languages=[lang]) is None:
+                mo_path = Path('.')/'locale'/lang/'LC_MESSAGES'/'content.mo'
+                po_path = Path('.')/'locale'/lang/'LC_MESSAGES'/'content.po'
+                if po_path.exists():
+                    print(f'The file "{str(mo_path)}" not found.\nUsing "{str(po_path)}" instead.')
+                    pofile(po_path).save_as_mofile(mo_path)
+                    print(f'"{str(mo_path)}" generated.')
+                else:
+                    print(f'The file "{str(mo_path)}" or "{str(po_path)}" not found.')
+                    print(f'Using the original Lean files for "{lang}".\n')
+            self.translations =[gettext.translation('content', localedir=Path('.')/'locale',
                 languages=[lang], fallback=True) for lang in self.languages]
 
         self.original_texts = []

@@ -166,8 +166,6 @@ folder, create a `LC_MESSAGES` folder containing a copy of `content.pot`
 named `content.po` (hence removing the final "t" which stands for
 "template"). You can then either edit this file by hand or use a
 dedicated software such as [poedit](https://poedit.net/).
-After addding a translation, generate the file `content.mo`.
-In poedit, this can be done by simply clicking the save button.
 
 You can then use 
 ```bash
