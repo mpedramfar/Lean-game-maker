@@ -17,8 +17,6 @@ import * as d3 from 'd3';
 
 const seedrandom = require("seedrandom");
 
-let MathJax = require('MathJax');
-
 const showdown = require('showdown');
 let markdownConverter = new showdown.Converter({
   openLinksInNewWindow: true,
@@ -30,12 +28,21 @@ let gameTexts: Array<Array<string>>;
 const CurrentLanguageIndexContext = React.createContext(0);
 
 
+function renderLaTeX(){
+  let MathJax = require('MathJax');
+  if(!MathJax){
+    delete require.cache[require.resolve("MathJax")];
+    MathJax = require("MathJax");
+  }
+  if(MathJax)
+    MathJax.Hub.Queue(["Typeset",MathJax.Hub]);
+}
 
 
 
 interface LeanStatusProps {
   file: string;
-  isReady: (boolean) => void;
+  isReady: (val: boolean) => void;
 }
 interface LeanStatusState {
   currentlyRunning: boolean;
@@ -626,13 +633,7 @@ class Level extends React.Component<LevelProps, LevelState> {
   }
 
   componentDidMount(){
-    if(!MathJax){
-      delete require.cache[require.resolve("MathJax")];
-      MathJax = require("MathJax");
-    }
-
-    if(MathJax)
-      MathJax.Hub.Queue(["Typeset",MathJax.Hub]);
+    renderLaTeX();
   }
 
   render() {
@@ -1194,7 +1195,7 @@ class Game extends React.Component<GameProps, GameState> {
     
     const resetButton = <button className='ridge-button'
       style={{ 
-        float: 'right', height:'100%', fontSize: 'x-large',
+        float: 'right', height:'100%', fontSize: 'large',
         width: (this.props.languages.length > 1 ? '6%' : '10%')
       }}
       onClick={this.props.resetGame} title={"Reset game"}
@@ -1202,7 +1203,7 @@ class Game extends React.Component<GameProps, GameState> {
     
     const brighnessButton = <button className='ridge-button'
       style={{ 
-        float: 'right', height:'100%', fontSize: 'x-large',
+        float: 'right', height:'100%', fontSize: 'large',
         width: (this.props.languages.length > 1 ? '6%' : '10%')
       }}
       onClick={() => {
@@ -1575,6 +1576,7 @@ class PageManager {
       this.isSaved = false;
       document.title = gameTexts[index][this.gameData.translated_name];
       this.currentLanguageIndex = index;
+      setTimeout(renderLaTeX, 500);
     }
   }
 
