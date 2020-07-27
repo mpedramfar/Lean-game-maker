@@ -41,7 +41,7 @@ class FileReader:
         if occ:
             self.translator.occ = occ
         self.filename = path
-        with open(str(path), 'r') as f:
+        with open(str(path), 'r', encoding='utf8') as f:
             self.raw_text = f.read()
             f.seek(0)
             for line in f:

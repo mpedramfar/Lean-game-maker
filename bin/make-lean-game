@@ -16,12 +16,6 @@ module_path = Path(lean_game_maker.__file__).parent
 interactive_path = module_path.parent / 'interactive_interface'
 
 def render_lean_project(outdir=None, nolib=False, devmode=False, locale='en'):
-    try:
-        leanpkg_toml = toml.load('leanpkg.toml')
-    except FileNotFoundError:
-        raise FileNotFoundError("Couldn't find a leanpkg.toml, I give up.")
-    toolchain = leanpkg_toml['package']['lean_version']
-
 
     outdir = outdir or 'html'
     Path(outdir).mkdir(exist_ok=True)
@@ -51,7 +45,7 @@ def render_lean_project(outdir=None, nolib=False, devmode=False, locale='en'):
     }
 
 
-    InteractiveServer(interactive_path=interactive_path,toolchain=toolchain, outdir=outdir,
+    InteractiveServer(interactive_path=interactive_path, outdir=outdir,
             library_zip_fn= game_data['library_zip_fn']).copy_files(make_lib = not nolib)
 
 
@@ -93,7 +87,7 @@ def render_lean_project(outdir=None, nolib=False, devmode=False, locale='en'):
 
     game_data['texts'] = translator.translated_texts
 
-    with open(str(Path(outdir) / 'game_data.json'), 'w') as f:
+    with open(str(Path(outdir)/'game_data.json'), 'w', encoding='utf8') as f:
         f.write(jsonpickle.encode(game_data, unpicklable=False))
 
     translator.save_pot()

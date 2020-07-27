@@ -3,15 +3,25 @@ import os
 import zipfile, subprocess, json, re
 import glob, distutils.dir_util
 from pathlib import Path
+import toml
 
 
 class InteractiveServer:
-    def __init__(self, interactive_path, toolchain, outdir, library_zip_fn):
+    def __init__(self, interactive_path, outdir, library_zip_fn):
         self.interactive_path = interactive_path
-        self.toolchain = toolchain
         self.outdir = outdir
         self.library_zip_fn = str( (Path(self.outdir) / library_zip_fn).resolve() )
 
+        try:
+            leanpkg_toml = toml.load('leanpkg.toml')
+        except FileNotFoundError:
+            raise FileNotFoundError("Couldn't find a leanpkg.toml, I give up.")
+        toolchain = leanpkg_toml['package']['lean_version']
+
+        if os.name == 'nt':
+            self.js_wasm_path = Path(self.interactive_path / 'lean_server' / toolchain.replace(':', ' '))
+        else:
+            self.js_wasm_path = Path(self.interactive_path / 'lean_server' / toolchain)
 
     def make_library(self):
         library_zip_fn = self.library_zip_fn
@@ -97,17 +107,16 @@ class InteractiveServer:
                 print('Wrote olean map to {0}'.format(map_fn))        
 
     def check_server_exists(self):
-        p = Path(self.interactive_path / 'lean_server' / self.toolchain)
-        p.mkdir(parents=True, exist_ok=True)
+        self.js_wasm_path.mkdir(parents=True, exist_ok=True)
         for f in ['lean_js_js.js', 'lean_js_wasm.js', 'lean_js_wasm.wasm']:
-            if not (p / f).is_file():
-                raise FileNotFoundError(f'Could not find the file "{p/f}" which is necessary to run Lean in the browser.')
+            if not (self.js_wasm_path/f).is_file():
+                raise FileNotFoundError(f'Could not find the file "{self.js_wasm_path/f}" which is necessary to run Lean in the browser.')
 
 
     def copy_files(self, make_lib=True):
         self.check_server_exists()
         
         distutils.dir_util.copy_tree(self.interactive_path / 'dist', str(Path(self.outdir)))
-        distutils.dir_util.copy_tree(self.interactive_path / 'lean_server' / self.toolchain, str(Path(self.outdir)))
+        distutils.dir_util.copy_tree(self.js_wasm_path, str(Path(self.outdir)))
         if make_lib:
             self.make_library()
