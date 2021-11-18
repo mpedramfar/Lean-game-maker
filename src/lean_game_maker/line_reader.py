@@ -85,7 +85,7 @@ class FileReader:
             o.proof      = "\n".join(lines[o.firstProofLineNumber-1 : o.lastProofLineNumber])
             o.textAfter  = "\n" + "\n".join(lines[o.lastProofLineNumber : ])
             o.height     = o.lastProofLineNumber - o.firstProofLineNumber + 1
-            o.editorText = 'sorry\nsorry' if (self.problemIndex == i) else self.translator.register(o.proof, True, True)
+            o.editorText = 'admit' if (self.problemIndex == i) else self.translator.register(o.proof, True, True)
             o.lineOffset = o.firstProofLineNumber-1
 
             m = regex.compile(r"^[^:\(\{\s]*([\s\S]*):=\s*$", regex.MULTILINE).match(o.lean)
