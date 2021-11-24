@@ -1511,7 +1511,7 @@ class PageManager {
           let levelData = worldData.levels[l];
           if(!isNaN(levelData.activeIndex) && levelData.activeIndex != -1){
             let problemData = levelData.objects[levelData.activeIndex] as ProvableObject;
-            let t = problemData.editorText == "  sorry" ? "sorrry" : problemData.editorText;
+            let t = problemData.editorText == "  sorry" ? "sorry" : problemData.editorText;
             savedGameData.data.push({lean: problemData.lean, isSolved: levelData.isSolved, editorText: t});
           }
         }
