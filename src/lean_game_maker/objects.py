@@ -395,10 +395,10 @@ class ProofEnd(LineReader):
         return True
 
 class ProofHintBegin(LineReader):
-    regex = regex.compile(r'^/- begin\s*$')
+    regex = regex.compile(r'^/- proof hint\s*$')
 
     def run(self, m: Match, file_reader: FileReader) -> bool:
-        if file_reader.status not in ['lemma_lean', 'theorem_lean', 'example_lean', 'definition_lean']:
+        if file_reader.status != 'proof':
             return False
         file_reader.status = 'proof_hint'
         file_reader.normal_line_handler = dismiss_line # Proofs shouldn't start with normal line
@@ -411,7 +411,7 @@ class ProofHintEnd(LineReader):
     def run(self, m: Match, file_reader: FileReader) -> bool:
         if file_reader.status != 'proof_hint':
             return False
-        file_reader.reset()
+        file_reader.status = 'proof'
         return True
 
 
