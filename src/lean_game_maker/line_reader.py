@@ -87,7 +87,10 @@ class FileReader:
                 self.problemIndex = i
             o.textBefore = "\n".join(lines[ : o.firstProofLineNumber-1]) + "\n"
             o.proof      = "\n".join(lines[o.firstProofLineNumber-1 : o.lastProofLineNumber])
-            o.proof_hint = "\n".join(lines[o.firstProofHintLineNumber-1 : o.lastProofHintLineNumber])
+            try:
+                o.proof_hint = "\n".join(lines[o.firstProofHintLineNumber-1 : o.lastProofHintLineNumber])
+            except AttributeError:
+                o.proof_hint = "sorry"
             o.textAfter  = "\n" + "\n".join(lines[o.lastProofLineNumber : ])
             o.height     = o.lastProofLineNumber - o.firstProofLineNumber + 1
             # o.editorText = 'sorry' if (self.problemIndex == i) else self.translator.register(o.proof, True, True)
