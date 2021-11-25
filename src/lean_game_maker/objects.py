@@ -395,7 +395,7 @@ class ProofEnd(LineReader):
         return True
 
 class ProofHintBegin(LineReader):
-    regex = regex.compile(r'^/- proof hint\s*$')
+    regex = regex.compile(r'^/-\s*hint\s*$')
 
     def run(self, m: Match, file_reader: FileReader) -> bool:
         if file_reader.status != 'proof':
