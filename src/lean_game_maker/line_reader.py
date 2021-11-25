@@ -52,9 +52,9 @@ class FileReader:
                         elif reader.__class__.__name__ == 'ProofEnd':
                             self.objects[-1].lastProofLineNumber = self.cur_line_nb - 1
                         if reader.__class__.__name__ == 'ProofHintBegin':
-                            self.objects[-1].firstProofLineNumber = self.cur_line_nb + 1
+                            self.objects[-1].firstProofHintLineNumber = self.cur_line_nb + 1
                         elif reader.__class__.__name__ == 'ProofHintEnd':
-                            self.objects[-1].lastProofLineNumber = self.cur_line_nb - 1
+                            self.objects[-1].lastProofHintLineNumber = self.cur_line_nb - 1
                         break
                 else:
                     if blank_line_regex.match(line):
