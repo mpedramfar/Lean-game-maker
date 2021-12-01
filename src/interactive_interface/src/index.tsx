@@ -221,7 +221,7 @@ interface InfoViewState {
 }
 class InfoView extends React.Component<InfoViewProps, InfoViewState> {
   private subscriptions: monaco.IDisposable[] = [];
-  private sceduleCheckIfSolved: boolean = false;
+  private scheduleCheckIfSolved: boolean = false;
   private messageUpdateCounter: number = 0;
 
   constructor(props: InfoViewProps) {
@@ -274,7 +274,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
   }
 
   checkIfSolved(oldMessageUpdateCounter: number){
-    if(this.sceduleCheckIfSolved && oldMessageUpdateCounter == this.messageUpdateCounter && oldMessageUpdateCounter > 0){
+    if(this.scheduleCheckIfSolved && oldMessageUpdateCounter == this.messageUpdateCounter && oldMessageUpdateCounter > 0){
       if( this.state.messages.filter((v) => (v.severity =='error' || v.severity == 'warning')).length == 0 ){
         this.props.isSolved();
         this.setState({ solved : true });
@@ -282,7 +282,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
         this.setState({ solved : false });
       }
     }
-    this.sceduleCheckIfSolved = false;
+    this.scheduleCheckIfSolved = false;
   }
 
   refreshGoal(nextProps?: InfoViewProps) {
@@ -328,7 +328,7 @@ class InfoView extends React.Component<InfoViewProps, InfoViewState> {
 
     return ( 
       <div className='no-mathjax info-view'>
-        <LeanStatus file={this.props.file} isReady={(val) => {this.sceduleCheckIfSolved = val;}}/>
+        <LeanStatus file={this.props.file} isReady={(val) => {this.scheduleCheckIfSolved = val;}}/>
         <Container vertical={true} style={{ height: '100%' }}>
           <Section minSize={200}>
             {goalDiv}
