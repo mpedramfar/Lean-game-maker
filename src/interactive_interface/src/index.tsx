@@ -1116,6 +1116,8 @@ interface GameProps {
   level: number;
   updateLanguageIndex: (i: number)=>void;
   saveGame: ()=>void;
+  saveGameToFile: ()=>void;
+  loadGameFromFile: (input: FileList)=>void;
   resetGame: ()=>void;
   updateURL: (world: number, level: number)=>void;
   updateEditorData: (data: Partial<editorDataInterface>) => void;
@@ -1220,13 +1222,47 @@ class Game extends React.Component<GameProps, GameState> {
 
     if(this.state.world == -1){
 
+      function FileInputDiv (props) {
+        const loadFromFileRef = React.useRef(null);
+
+        const loadFromFileInput = <input
+          ref={loadFromFileRef} type='file' style={{ display: 'none' }}
+          onChange={(e)=>{props.loadGameFromFile(e.target.files)}}
+        />;
+  
+        const loadFromFileButton = <button className='ridge-button'
+          style={{ 
+            float: 'right', height:'100%', fontSize: 'large',
+            width: (props.languages.length > 1 ? '6%' : '10%')
+          }}
+          onClick={() => {loadFromFileRef.current.click()}} title={"Load game from file"}
+          dangerouslySetInnerHTML={{__html: "&#128462;"}}></button>;
+
+        return (
+          <>
+            {loadFromFileInput}
+            {loadFromFileButton}
+          </>);
+      }
+
+      const saveToFileButton = <button className='ridge-button'
+        style={{ 
+          float: 'right', height:'100%', fontSize: 'large',
+          width: (this.props.languages.length > 1 ? '6%' : '10%')
+        }}
+        onClick={this.props.saveGameToFile} title={"Save game to file"}
+        dangerouslySetInnerHTML={{__html: "&#128427;"}}></button>;
+
       const buttonsPanel = (
         <div className="first-button-panel">
-          {resetButton}
           {brighnessButton}
           {languageMenu}
+          {resetButton}
+          {saveToFileButton}
+          <FileInputDiv loadGameFromFile={this.props.loadGameFromFile}
+                        languages={this.props.languages}/>
         </div>
-      );  
+      ); 
 
       const content = <Level fileName={this.props.fileName} key={"intro"} levelData={this.props.introData} 
           onDidCursorMove={(c) => {}} updateEditorData={this.props.updateEditorData} 
@@ -1277,9 +1313,9 @@ class Game extends React.Component<GameProps, GameState> {
       <div key={this.state.world} className="first-button-panel">
         <button className='ridge-button' style={{ float: 'left', width: '20%', height:'100%' }}
           onClick= {() => { this.gotoWorld.call(this, -1); }}> Main Menu </button>
-        {resetButton}
         {brighnessButton}
         {languageMenu}
+        {resetButton}
         {worldLabel}
       </div>
     );
@@ -1571,6 +1607,40 @@ class PageManager {
       && m.text == '"' + (this.world+1) + "," + (this.level+1) + '"') };
   }
 
+  
+  static saveGameToFile(){
+    this.saveGame();
+
+    let data = localStorage.getItem(this.savedGameLocalStorageKey);
+    let file = new Blob([data]);
+    let a = document.createElement("a"),
+            url = URL.createObjectURL(file);
+    a.href = url;
+    a.download = this.gameData.name + " saved data.json";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);  
+    }, 0);
+  }
+
+  
+  static loadGameFromFile(files: FileList){
+    if (files.length) {
+      const reader = new FileReader();
+      reader.addEventListener('load', () => {
+        let text = reader.result;
+        if(text){
+          localStorage.setItem(this.savedGameLocalStorageKey, text as string);
+          location.reload();
+        };          
+      });
+      reader.readAsText(files[0]);
+    }
+  }
+
+  
   static updateLanguageIndex(index: number){
     if(this.currentLanguageIndex != index){
       this.isSaved = false;
@@ -1616,6 +1686,7 @@ class PageManager {
                         languages={this.gameData.languages} currentLanguageIndex={this.currentLanguageIndex}
                         updateLanguageIndex={this.updateLanguageIndex.bind(this)}
                         saveGame={this.saveGame.bind(this)} resetGame={this.resetGame.bind(this)}
+                        saveGameToFile={this.saveGameToFile.bind(this)} loadGameFromFile={this.loadGameFromFile.bind(this)}
                         updateURL={this.updateURL.bind(this)} updateEditorData={this.updateEditorData.bind(this)}
                         isInfoMessage={isInfoMessage} getCurrentEditorText={() => this.activeEditorData.text}
                         darkMode={this.darkMode} updateDarkMode={this.updateDarkMode.bind(this)}/>,
