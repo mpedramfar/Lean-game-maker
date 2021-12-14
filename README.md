@@ -7,12 +7,16 @@ The games built with this library work best in Chrome and Firefox.
 
 ## Installation
 
-See the [installation guide](https://github.com/mmasdeu/Lean-game-maker/blob/master/INSTALL.md).
+See the [installation guide](https://github.com/mpedramfar/Lean-game-maker/blob/master/INSTALL.md).
 
 ## Usage
 
-See the [usage guide](https://github.com/mmasdeu/Lean-game-maker/blob/master/USAGE.md).
+See the [usage guide](https://github.com/mpedramfar/Lean-game-maker/blob/master/USAGE.md).
 
 ## Acknowledgements
 
-This fork aims at adding new features to the great original project of [mpedramfar](https://github.com/mpedramfar/Lean-game-maker/). The first one is the addition of hinted proofs.
+Special thanks to Bryan Gin-ge Chen and Patrick Massot.
+This project uses some codes from 
+[Bryan's fork of the lean-web-editor](https://github.com/bryangingechen/lean-web-editor)
+and
+[Patrick's Lean formatter](https://github.com/leanprover-community/format_lean).

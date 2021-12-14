@@ -2,7 +2,7 @@ const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
-const TerserPlugin = require('terser-webpack-plugin-legacy');
+const TerserPlugin = require('terser-webpack-plugin');
 
 const MonacoEditorSrc = path.join(__dirname, 'node_modules', 'react-monaco-editor');
 const VSMonacoEditorSrc = path.join(__dirname, 'node_modules', 'monaco-editor', 'min', 'vs');
