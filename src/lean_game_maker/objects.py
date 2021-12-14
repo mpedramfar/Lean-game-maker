@@ -394,6 +394,26 @@ class ProofEnd(LineReader):
         file_reader.reset()
         return True
 
+class ProofHintBegin(LineReader):
+    regex = regex.compile(r'^/-\s*hint\s*$')
+
+    def run(self, m: Match, file_reader: FileReader) -> bool:
+        if file_reader.status != 'proof':
+            return False
+        file_reader.status = 'proof_hint'
+        file_reader.normal_line_handler = dismiss_line # Proofs shouldn't start with normal line
+        return True
+
+
+class ProofHintEnd(LineReader):
+    regex = regex.compile(r'-/')  # Beware of match end
+
+    def run(self, m: Match, file_reader: FileReader) -> bool:
+        if file_reader.status != 'proof_hint':
+            return False
+        file_reader.status = 'proof'
+        return True
+
 
 
 #################
@@ -409,4 +429,5 @@ readers_list = [HiddenBegin, HiddenEnd,
     LemmaBegin, LemmaEnd,
     TheoremBegin, TheoremEnd,
     DefinitionBegin, DefinitionEnd,
-    ProofBegin, ProofEnd]
+    ProofBegin, ProofEnd,
+    ProofHintBegin, ProofHintEnd]

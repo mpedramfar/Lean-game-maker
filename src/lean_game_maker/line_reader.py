@@ -51,6 +51,10 @@ class FileReader:
                             self.objects[-1].firstProofLineNumber = self.cur_line_nb + 1
                         elif reader.__class__.__name__ == 'ProofEnd':
                             self.objects[-1].lastProofLineNumber = self.cur_line_nb - 1
+                        if reader.__class__.__name__ == 'ProofHintBegin':
+                            self.objects[-1].firstProofHintLineNumber = self.cur_line_nb + 1
+                        elif reader.__class__.__name__ == 'ProofHintEnd':
+                            self.objects[-1].lastProofHintLineNumber = self.cur_line_nb - 1
                         break
                 else:
                     if blank_line_regex.match(line):
@@ -83,9 +87,14 @@ class FileReader:
                 self.problemIndex = i
             o.textBefore = "\n".join(lines[ : o.firstProofLineNumber-1]) + "\n"
             o.proof      = "\n".join(lines[o.firstProofLineNumber-1 : o.lastProofLineNumber])
+            try:
+                o.proof_hint = "\n".join(lines[o.firstProofHintLineNumber-1 : o.lastProofHintLineNumber])
+            except AttributeError:
+                o.proof_hint = "sorry"
             o.textAfter  = "\n" + "\n".join(lines[o.lastProofLineNumber : ])
             o.height     = o.lastProofLineNumber - o.firstProofLineNumber + 1
-            o.editorText = 'sorry' if (self.problemIndex == i) else self.translator.register(o.proof, True, True)
+            # o.editorText = 'sorry' if (self.problemIndex == i) else self.translator.register(o.proof, True, True)
+            o.editorText = o.proof_hint if (self.problemIndex == i) else self.translator.register(o.proof, True, True)
             o.lineOffset = o.firstProofLineNumber-1
 
             m = regex.compile(r"^[^:\(\{\s]*([\s\S]*):=\s*$", regex.MULTILINE).match(o.lean)

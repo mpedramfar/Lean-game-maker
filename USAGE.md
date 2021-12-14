@@ -118,6 +118,27 @@ If a line in not contained in a comment, lemma, theorem, example or tactic, it w
 -- end hide
 ```
 
+Inside a proof, a comment between `/- hint` and `-/` will render as a partially finished proof, so that the user can just fill in the remaining sorry's. For example,
+```
+/- Lemma
+Description of the lemma
+-/
+lemma ... :=
+begin
+  ...
+/- hint
+by_cases a = 3,
+{
+  sorry
+},
+{
+  sorry
+}
+-/
+end
+```
+will show the user already the beginning of the proof.
+
  * Note that the lean segment of different problems, the lines between `-/` and `begin`, must be distinct. Even if two problems are meant to be identical, this could be achieved by adding a space at the end of the lean segment of one of them. If two problems have identical lean segments, they will not be saved properly. (See "Version and saved games" below)
 
 ## Making the game

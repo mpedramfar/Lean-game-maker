@@ -115,6 +115,7 @@ div.info-view {
   box-sizing: border-box;
   padding: 1em;
   border: double;
+  background-color: rgb(255, 255, 231);
 }
 
 .info-header {
@@ -140,11 +141,11 @@ div.info-view {
 
 .Resizer {
   z-index: 1;
-  background-color: var(--resizer-bg-color, #ccc);
+  background-color: var(--resizer-bg-color, rgb(255, 255, 255));
 }
 
 .Resizer:hover {
-  background-color: var(--resizer-bg-color, #999);
+  background-color: var(--resizer-bg-color, rgb(241, 241, 241));
 }
 
 .Resizer.horizontal {
