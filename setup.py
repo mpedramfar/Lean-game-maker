@@ -25,6 +25,8 @@ setup(
     package_data={
         '': ['*.css', '*.css.map', '*.js', 'templates/*'] + interactive_files,
     },
-    scripts=['bin/make-lean-game'],
+    entry_points=dict(
+        console_scripts=['make-lean-game = lean_game_maker.cli:main'],
+    ),
     install_requires=['regex >= 2018.7.11', 'jinja2 >= 2.10', 'mistletoe >= 0.7.1', 'toml >= 0.10.0', 'fire >= 0.1.3', 'jsonpickle >= 1.2', 'polib >= 1.1.0'])
 

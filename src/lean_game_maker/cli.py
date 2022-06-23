@@ -1,5 +1,3 @@
-#! /usr/bin/env python3
-
 import distutils.dir_util
 from fire import Fire
 from pathlib import Path
@@ -93,7 +91,7 @@ def render_lean_project(outdir=None, nolib=False, devmode=False, locale='en'):
     translator.save_pot()
 
 
-if __name__ == '__main__':
+def main():
     try:
         Fire(render_lean_project)
     except Exception as e:
