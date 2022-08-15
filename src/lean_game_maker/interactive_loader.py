@@ -29,7 +29,7 @@ class InteractiveServer:
         source_lib = "."
         source_lib_path = str(Path(source_lib).resolve()) + '/src'
 
-        subprocess.call(['leanpkg', 'build'])
+        subprocess.run(['leanpkg', 'build'])
 
         print('Using lean version:')
         lean_version = subprocess.run(['lean', '-v'], capture_output=True, encoding="utf-8").stdout
