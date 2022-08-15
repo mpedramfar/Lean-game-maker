@@ -29,10 +29,10 @@ class InteractiveServer:
         source_lib = "."
         source_lib_path = str(Path(source_lib).resolve()) + '/src'
 
-        subprocess.call(['leanpkg', 'build'])
+        subprocess.run(['leanpkg', 'build'], check=True)
 
         print('Using lean version:')
-        lean_version = subprocess.run(['lean', '-v'], capture_output=True, encoding="utf-8").stdout
+        lean_version = subprocess.run(['lean', '-v'], capture_output=True, encoding="utf-8", check=True).stdout
         print(lean_version)
         lean_githash = re.search("commit ([a-z0-9]{12}),", lean_version).group(1)
         # assume leanprover-community repo
@@ -56,8 +56,8 @@ class InteractiveServer:
                 elif parts[-1] != 'library':
                     lib_name = parts[-2] # assume lean_path contains _target/deps/name/src
                     git_dir = str(p.parent)+'/.git'
-                    lib_rev = subprocess.run(['git', '--git-dir='+git_dir, 'rev-parse', 'HEAD'], capture_output=True, encoding="utf-8").stdout.rstrip()
-                    lib_repo_url = subprocess.run(['git', '--git-dir='+git_dir, 'config', '--get', 'remote.origin.url'], capture_output=True, encoding="utf-8").stdout.rstrip()
+                    lib_rev = subprocess.run(['git', '--git-dir='+git_dir, 'rev-parse', 'HEAD'], capture_output=True, encoding="utf-8", check=True).stdout.rstrip()
+                    lib_repo_url = subprocess.run(['git', '--git-dir='+git_dir, 'config', '--get', 'remote.origin.url'], capture_output=True, encoding="utf-8", check=True).stdout.rstrip()
                     # assume that repos are hosted at github
                     lib_repo_match = re.search(r'github\.com[:/]([^\.]*)', lib_repo_url)
                     if lib_repo_match:
