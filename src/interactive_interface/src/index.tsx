@@ -1,5 +1,5 @@
 /// <reference types="monaco-editor" />
-import { InfoRecord, LeanJsOpts, Message } from '@bryangingechen/lean-client-js-browser';
+import { InfoRecord, LeanJsOpts, Message } from 'lean-client-js-browser';
 import * as React from 'react';
 import { findDOMNode, render } from 'react-dom';
 import { allMessages, checkInputCompletionChange, checkInputCompletionPosition, currentlyRunning, delayMs,
