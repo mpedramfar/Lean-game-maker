@@ -27,6 +27,9 @@ def render_lean_project(outdir=None, nolib=False, devmode=False, locale='en'):
     if 'extra_files' in game_config and Path(game_config['extra_files']).is_dir():
         distutils.dir_util.copy_tree(str(Path('.')/game_config['extra_files']), str(Path(outdir)/game_config['extra_files']))
 
+    lean_server_path = None
+    if 'lean_server_path' in game_config:
+        lean_server_path = Path('.') / game_config['lean_server_path']
 
     name = game_config.get('name', 'Lean game')
     version = str(game_config.get('version', ''))
@@ -45,8 +48,11 @@ def render_lean_project(outdir=None, nolib=False, devmode=False, locale='en'):
     }
 
 
-    InteractiveServer(interactive_path=interactive_path, outdir=outdir,
-            library_zip_fn= game_data['library_zip_fn']).copy_files(make_lib = not nolib)
+    InteractiveServer(
+        interactive_path=interactive_path,
+        outdir=outdir,
+        library_zip_fn= game_data['library_zip_fn']
+    ).copy_files(lean_server_path, make_lib = not nolib)
 
 
     file_reader = FileReader(translator, default_line_handler, readers_list)
