@@ -27,11 +27,12 @@ class InteractiveServer:
         else:
             self.toolchain = ('leanprover/lean', toolchain)
 
-    def make_library(self):
+    def make_library(self, devmode: bool):
         library_zip_fn = self.library_zip_fn
         
         source_lib = "."
         source_lib_path = str(Path(source_lib).resolve()) + '/src'
+        compression = None if devmode else 9
 
         subprocess.call(['leanpkg', 'build'])
 
@@ -51,7 +52,9 @@ class InteractiveServer:
         oleans = {}
         num_olean = {}
         Path(library_zip_fn).parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(library_zip_fn, mode='w', compression=zipfile.ZIP_DEFLATED, allowZip64=False, compresslevel=9) as zf:
+        with zipfile.ZipFile(library_zip_fn, mode='w',
+                             compression=zipfile.ZIP_DEFLATED,
+                             allowZip64=False, compresslevel=compression) as zf:
             for p in lean_path:
                 parts = p.parts
                 if str(p.resolve()) == source_lib_path: # if using source_lib/src
@@ -125,7 +128,7 @@ class InteractiveServer:
                 zip.extract(f'build/shell/{f}', js_wasm_path)
 
 
-    def copy_files(self, lean_server_path: Optional[Path], make_lib=True):
+    def copy_files(self, lean_server_path: Optional[Path], make_lib=True, devmode=False):
         if lean_server_path:
             if not lean_server_path.is_dir():
                 raise FileNotFoundError(f'Could not find the manually specified lean_server_path: {lean_server_path}')
@@ -143,4 +146,4 @@ class InteractiveServer:
         distutils.dir_util.copy_tree(self.interactive_path / 'dist', str(Path(self.outdir)))
         distutils.dir_util.copy_tree(js_wasm_path, str(Path(self.outdir)))
         if make_lib:
-            self.make_library()
+            self.make_library(devmode)

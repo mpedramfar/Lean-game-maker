@@ -52,7 +52,7 @@ def render_lean_project(outdir=None, nolib=False, devmode=False, locale='en'):
         interactive_path=interactive_path,
         outdir=outdir,
         library_zip_fn= game_data['library_zip_fn']
-    ).copy_files(lean_server_path, make_lib = not nolib)
+    ).copy_files(lean_server_path, make_lib = not nolib, devmode = devmode)
 
 
     file_reader = FileReader(translator, default_line_handler, readers_list)
