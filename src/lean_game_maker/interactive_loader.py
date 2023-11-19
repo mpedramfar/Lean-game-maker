@@ -4,6 +4,9 @@ import zipfile, subprocess, json, re
 import glob, distutils.dir_util
 from pathlib import Path
 import toml
+from typing import Optional, Tuple
+from requests import get
+from io import BytesIO
 
 
 class InteractiveServer:
@@ -18,16 +21,18 @@ class InteractiveServer:
             raise FileNotFoundError("Couldn't find a leanpkg.toml, I give up.")
         toolchain = leanpkg_toml['package']['lean_version']
 
-        if os.name == 'nt':
-            self.js_wasm_path = Path(self.interactive_path / 'lean_server' / toolchain.replace(':', ' '))
+        if ':' in toolchain:
+            repo, _, ver = toolchain.partition(':')
+            self.toolchain = (repo, ver)
         else:
-            self.js_wasm_path = Path(self.interactive_path / 'lean_server' / toolchain)
+            self.toolchain = ('leanprover/lean', toolchain)
 
-    def make_library(self):
+    def make_library(self, devmode: bool):
         library_zip_fn = self.library_zip_fn
         
         source_lib = "."
         source_lib_path = str(Path(source_lib).resolve()) + '/src'
+        compression = None if devmode else 9
 
         subprocess.call(['leanpkg', 'build'])
 
@@ -47,7 +52,9 @@ class InteractiveServer:
         oleans = {}
         num_olean = {}
         Path(library_zip_fn).parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(library_zip_fn, mode='w', compression=zipfile.ZIP_DEFLATED, allowZip64=False, compresslevel=9) as zf:
+        with zipfile.ZipFile(library_zip_fn, mode='w',
+                             compression=zipfile.ZIP_DEFLATED,
+                             allowZip64=False, compresslevel=compression) as zf:
             for p in lean_path:
                 parts = p.parts
                 if str(p.resolve()) == source_lib_path: # if using source_lib/src
@@ -106,17 +113,37 @@ class InteractiveServer:
                 f.write('\n')
                 print('Wrote olean map to {0}'.format(map_fn))        
 
-    def check_server_exists(self):
-        self.js_wasm_path.mkdir(parents=True, exist_ok=True)
+    def check_server_exists(self, js_wasm_path: Path):
         for f in ['lean_js_js.js', 'lean_js_wasm.js', 'lean_js_wasm.wasm']:
-            if not (self.js_wasm_path/f).is_file():
-                raise FileNotFoundError(f'Could not find the file "{self.js_wasm_path/f}" which is necessary to run Lean in the browser.')
+            if not (js_wasm_path/f).is_file():
+                raise FileNotFoundError(f'Could not find the file "{js_wasm_path/f}" which is necessary to run Lean in the browser.')
+
+    def get_lean_server(self, js_wasm_path: Path):
+        print(f'Lean server not found; downloading to {js_wasm_path}')
+        url = f'https://github.com/{self.toolchain[0]}/releases/download/v{self.toolchain[1]}/lean-{self.toolchain[1]}--browser.zip'
+        r = get(url)
+        with zipfile.ZipFile(BytesIO(r.content)) as zip:
+            for f in ['lean_js_js.js', 'lean_js_wasm.js', 'lean_js_wasm.wasm']:
+                zip.getinfo(f'build/shell/{f}').filename = f
+                zip.extract(f'build/shell/{f}', js_wasm_path)
 
 
-    def copy_files(self, make_lib=True):
-        self.check_server_exists()
+    def copy_files(self, lean_server_path: Optional[Path], make_lib=True, devmode=False):
+        if lean_server_path:
+            if not lean_server_path.is_dir():
+                raise FileNotFoundError(f'Could not find the manually specified lean_server_path: {lean_server_path}')
+            js_wasm_path = lean_server_path
+        else:
+            js_wasm_path = Path('./lean_server') / self.toolchain[0] / self.toolchain[1]
+            js_wasm_path.mkdir(parents=True, exist_ok=True)
+            try:
+                self.check_server_exists(js_wasm_path)
+            except FileNotFoundError:
+                self.get_lean_server(js_wasm_path)
+
+        self.check_server_exists(js_wasm_path)
         
         distutils.dir_util.copy_tree(self.interactive_path / 'dist', str(Path(self.outdir)))
-        distutils.dir_util.copy_tree(self.js_wasm_path, str(Path(self.outdir)))
+        distutils.dir_util.copy_tree(js_wasm_path, str(Path(self.outdir)))
         if make_lib:
-            self.make_library()
+            self.make_library(devmode)

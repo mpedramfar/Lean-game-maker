@@ -1,5 +1,5 @@
 /// <reference types="monaco-editor" />
-import * as lean from '@bryangingechen/lean-client-js-browser';
+import * as lean from 'lean-client-js-browser';
 import { leanSyntax } from './syntax';
 import * as translations from './translations.json';
 
